@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Vanguard Guest SOS</title>
+    <style>
+        body {
+            background: #000;
+            color: white;
+            font-family: sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+        }
+
+        .app-container {
+            width: 90%;
+            max-width: 350px;
+            height: 600px;
+            background: #121212;
+            border: 4px solid #333;
+            border-radius: 40px;
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .status-bar {
+            height: 30px;
+            background: #1a1a1a;
+            display: flex;
+            justify-content: space-between;
+            padding: 0 20px;
+            font-size: 12px;
+            align-items: center;
+            color: #888;
+        }
+
+        .content {
+            flex: 1;
+            padding: 20px;
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-around;
+        }
+
+        #sos-button {
+            width: 180px;
+            height: 180px;
+            background: radial-gradient(#ff5252, #b71c1c);
+            border-radius: 50%;
+            border: 8px solid #4a0000;
+            color: white;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+            box-shadow: 0 0 20px rgba(255, 82, 82, 0.4);
+            margin: 0 auto;
+            transition: 0.2s;
+        }
+
+        #sos-button:active {
+            transform: scale(0.95);
+            box-shadow: 0 0 40px #ff5252;
+        }
+
+        .info {
+            color: #888;
+            font-size: 14px;
+        }
+
+        .network-status {
+            font-size: 12px;
+            color: #00e676;
+            margin-top: 10px;
+        }
+
+        #message-overlay {
+            display: none;
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 10;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+
+        .pulse {
+            animation: pulse-red 2s infinite;
+        }
+
+        @keyframes pulse-red {
+            0% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.5;
+            }
+
+            100% {
+                opacity: 1;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="app-container">
+        <div class="status-bar">
+            <span>11:11</span>
+            <span style="color: #ff5252;">⚠️ NO WI-FI (VANGUARD MESH ACTIVE)</span>
+        </div>
+
+        <div class="content">
+            <div>
+                <h2 style="margin: 0;">Room 402</h2>
+                <p class="info">Emergency Services Connected via Local Mesh</p>
+            </div>
+
+            <button id="sos-button" onclick="triggerSOS()">SOS</button>
+
+            <div class="info">
+                Tap and hold for 2 seconds to alert hotel security.
+                <div class="network-status" id="mesh-info">● 4 Nearby Relay Nodes Found</div>
+            </div>
+        </div>
+
+        <div id="message-overlay">
+            <h1 class="pulse" style="color: #ff5252;">SIGNAL SENT</h1>
+            <p style="text-align: center;">Vanguard GDC has acknowledged your request. Help is being dispatched to Room
+                402.</p>
+            <div style="font-size: 40px; margin-top: 20px;">🚒 👮</div>
+            <button onclick="location.reload()"
+                style="margin-top: 30px; background: transparent; border: 1px solid #555; color: #888; padding: 10px;">Cancel
+                Alert</button>
+        </div>
+    </div>
+
+    <script>
+       function triggerSOS() {
+    const btn = document.getElementById('sos-button');
+    btn.innerHTML = "SENDING...";
+    btn.style.background = "#555";
+
+    // Matching your EmergencyPacketDto.java structure
+    const packet = {
+        uniqueId: "SOS-" + Date.now(),
+        priority: 1,
+        payload: "GUEST_SOS: Fire/Medical Emergency in Room 402",
+        timestamp: Date.now(),
+        timeToLive: 600000 // 10 minutes
+    };
+
+    setTimeout(() => {
+        // Changed URL to match your @RequestMapping("/api/alerts")
+        fetch('http://localhost:8080/api/alerts', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(packet)
+        })
+        .then(response => {
+            if (response.ok) {
+                document.getElementById('message-overlay').style.display = 'flex';
+            } else {
+                throw new Error("Server rejected packet");
+            }
+        })
+        .catch(err => {
+            console.error(err);
+            alert("Mesh connection failed. Keep moving toward the hallway.");
+            btn.innerHTML = "SOS";
+            btn.style.background = "radial-gradient(#ff5252, #b71c1c)";
+        });
+    }, 1200);
+}
+    </script>
+</body>
+
+</html>
