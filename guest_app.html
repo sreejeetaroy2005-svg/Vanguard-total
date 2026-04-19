@@ -1,193 +1,85 @@
 <!DOCTYPE html>
 <html>
-
 <head>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Vanguard Guest SOS</title>
     <style>
-        body {
-            background: #000;
-            color: white;
-            font-family: sans-serif;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            height: 100vh;
-            margin: 0;
-        }
-
-        .app-container {
-            width: 90%;
-            max-width: 350px;
-            height: 600px;
-            background: #121212;
-            border: 4px solid #333;
-            border-radius: 40px;
-            position: relative;
-            overflow: hidden;
-            display: flex;
-            flex-direction: column;
-        }
-
-        .status-bar {
-            height: 30px;
-            background: #1a1a1a;
-            display: flex;
-            justify-content: space-between;
-            padding: 0 20px;
-            font-size: 12px;
-            align-items: center;
-            color: #888;
-        }
-
-        .content {
-            flex: 1;
-            padding: 20px;
-            text-align: center;
-            display: flex;
-            flex-direction: column;
-            justify-content: space-around;
-        }
-
-        #sos-button {
-            width: 180px;
-            height: 180px;
-            background: radial-gradient(#ff5252, #b71c1c);
-            border-radius: 50%;
-            border: 8px solid #4a0000;
-            color: white;
-            font-size: 28px;
-            font-weight: bold;
-            cursor: pointer;
-            box-shadow: 0 0 20px rgba(255, 82, 82, 0.4);
-            margin: 0 auto;
-            transition: 0.2s;
-        }
-
-        #sos-button:active {
-            transform: scale(0.95);
-            box-shadow: 0 0 40px #ff5252;
-        }
-
-        .info {
-            color: #888;
-            font-size: 14px;
-        }
-
-        .network-status {
-            font-size: 12px;
-            color: #00e676;
-            margin-top: 10px;
-        }
-
-        #message-overlay {
-            display: none;
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.9);
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            z-index: 10;
-            padding: 20px;
-            box-sizing: border-box;
-        }
-
-        .pulse {
-            animation: pulse-red 2s infinite;
-        }
-
-        @keyframes pulse-red {
-            0% {
-                opacity: 1;
-            }
-
-            50% {
-                opacity: 0.5;
-            }
-
-            100% {
-                opacity: 1;
-            }
-        }
+        body { background: #000; color: white; font-family: sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; transition: filter 0.5s; }
+        .app-container { width: 90%; max-width: 350px; height: 600px; background: #121212; border: 4px solid #333; border-radius: 40px; position: relative; overflow: hidden; display: flex; flex-direction: column; }
+        .status-bar { height: 30px; background: #1a1a1a; display: flex; justify-content: space-between; padding: 0 20px; font-size: 12px; align-items: center; color: #888; }
+        .content { flex: 1; padding: 20px; text-align: center; display: flex; flex-direction: column; justify-content: space-around; }
+        .triage-btn { width: 100%; padding: 18px; border-radius: 12px; font-weight: bold; font-size: 16px; cursor: pointer; border: none; color: white; transition: 0.2s; }
+        .triage-btn:active { transform: scale(0.98); opacity: 0.8; }
+        .info { color: #888; font-size: 14px; }
+        #message-overlay { display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.95); flex-direction: column; align-items: center; justify-content: center; z-index: 10; padding: 20px; box-sizing: border-box; }
+        .pulse { animation: pulse-red 2s infinite; }
+        @keyframes pulse-red { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
     </style>
 </head>
-
 <body>
-
-    <div class="app-container">
+    <div class="app-container" id="main-app">
         <div class="status-bar">
             <span>11:11</span>
-            <span style="color: #ff5252;">⚠️ NO WI-FI (VANGUARD MESH ACTIVE)</span>
+            <span style="color: #ff5252;">⚠️ MESH ACTIVE</span>
         </div>
 
         <div class="content">
             <div>
                 <h2 style="margin: 0;">Room 402</h2>
-                <p class="info">Emergency Services Connected via Local Mesh</p>
+                <p class="info" id="mode-text">P2P Tactical Mode</p>
             </div>
 
-            <button id="sos-button" onclick="triggerSOS()">SOS</button>
+            <div style="display: flex; flex-direction: column; gap: 12px;">
+                <button class="triage-btn" onclick="sendTriage('INTRUDER', 'Intruder Alert')" style="background: #b71c1c;">🚨 REPORT INTRUDER</button>
+                <button class="triage-btn" onclick="sendTriage('MEDICAL', 'Medical SOS')" style="background: #f57f17;">🚑 MEDICAL EMERGENCY</button>
+                <button class="triage-btn" onclick="sendTriage('SAFE', 'Status: Safe')" style="background: #1b5e20;">✅ I AM SAFE</button>
+            </div>
 
-            <div class="info">
-                Tap and hold for 2 seconds to alert hotel security.
-                <div class="network-status" id="mesh-info">● 4 Nearby Relay Nodes Found</div>
+            <div>
+                <button onclick="toggleStealth()" style="background: #333; color: #aaa; border: none; padding: 10px 20px; border-radius: 20px; cursor: pointer;">🕶️ STEALTH MODE</button>
+                <div class="info" style="margin-top: 15px;">Connected to GDC Gateway</div>
             </div>
         </div>
 
         <div id="message-overlay">
-            <h1 class="pulse" style="color: #ff5252;">SIGNAL SENT</h1>
-            <p style="text-align: center;">Vanguard GDC has acknowledged your request. Help is being dispatched to Room
-                402.</p>
-            <div style="font-size: 40px; margin-top: 20px;">🚒 👮</div>
-            <button onclick="location.reload()"
-                style="margin-top: 30px; background: transparent; border: 1px solid #555; color: #888; padding: 10px;">Cancel
-                Alert</button>
+            <h1 class="pulse" id="status-title" style="color: #ff5252;">SIGNAL SENT</h1>
+            <p id="status-desc" style="text-align: center;">Vanguard GDC has acknowledged. Help is en route.</p>
+            <div style="font-size: 40px;">👮🚒</div>
+            <button onclick="location.reload()" style="margin-top: 25px; background: none; border: 1px solid #444; color: #666; padding: 8px;">Dismiss</button>
         </div>
     </div>
 
     <script>
-       function triggerSOS() {
-    const btn = document.getElementById('sos-button');
-    btn.innerHTML = "SENDING...";
-    btn.style.background = "#555";
+        function toggleStealth() {
+            const app = document.getElementById('main-app');
+            const isDim = app.style.filter === "brightness(0.1)";
+            app.style.filter = isDim ? "none" : "brightness(0.1)";
+            document.getElementById('mode-text').innerText = isDim ? "P2P Tactical Mode" : "STEALTH ACTIVE";
+        }
 
-    // Matching your EmergencyPacketDto.java structure
-    const packet = {
-        uniqueId: "SOS-" + Date.now(),
-        priority: 1,
-        payload: "GUEST_SOS: Fire/Medical Emergency in Room 402",
-        timestamp: Date.now(),
-        timeToLive: 600000 // 10 minutes
-    };
+        function sendTriage(priority, msg) {
+            const packet = {
+                uniqueId: "PKT-" + Date.now(),
+                priority: priority,
+                payload: msg,
+                roomNumber: "402",
+                timestamp: Date.now(),
+                timeToLive: 600000
+            };
 
-    setTimeout(() => {
-        // Changed URL to match your @RequestMapping("/api/alerts")
-        fetch('http://localhost:8080/api/alerts', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(packet)
-        })
-        .then(response => {
-            if (response.ok) {
-                document.getElementById('message-overlay').style.display = 'flex';
-            } else {
-                throw new Error("Server rejected packet");
-            }
-        })
-        .catch(err => {
-            console.error(err);
-            alert("Mesh connection failed. Keep moving toward the hallway.");
-            btn.innerHTML = "SOS";
-            btn.style.background = "radial-gradient(#ff5252, #b71c1c)";
-        });
-    }, 1200);
-}
+            fetch('http://localhost:8080/api/alerts', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(packet)
+            })
+            .then(res => {
+                if(res.ok) {
+                    document.getElementById('status-title').innerText = priority + " LOGGED";
+                    document.getElementById('message-overlay').style.display = 'flex';
+                }
+            })
+            .catch(err => alert("Mesh Rerouting..."));
+        }
     </script>
 </body>
-
 </html>

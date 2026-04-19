@@ -1,65 +1,226 @@
 <!DOCTYPE html>
 <html>
+
 <head>
     <title>Vanguard GDC | Security Command</title>
     <style>
-        body { background: #0a0a0a; color: #eee; font-family: 'Segoe UI', sans-serif; padding: 30px; }
-        .header { border-bottom: 2px solid #333; padding-bottom: 10px; margin-bottom: 30px; display: flex; justify-content: space-between; align-items: center; }
-        .alert-card { background: #1a1a1a; border-left: 5px solid #ff5252; padding: 20px; margin-bottom: 15px; border-radius: 4px; display: flex; justify-content: space-between; animation: slideIn 0.3s ease-out; }
-        .priority-1 { border-left-color: #ff5252; background: rgba(255, 82, 82, 0.1); }
-        .timestamp { color: #888; font-size: 12px; }
-        .room-num { font-size: 24px; font-weight: bold; color: #ff5252; }
-        @keyframes slideIn { from { transform: translateX(-20px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
-        .empty-state { text-align: center; color: #444; margin-top: 100px; font-size: 20px; }
-    </style>
-</head>
-<body>
+        body {
+            background: #0a0a0a;
+            color: #eee;
+            font-family: 'Segoe UI', sans-serif;
+            padding: 30px;
+        }
 
-<div class="header">
-    <h1>VANGUARD GDC: LIVE MONITOR</h1>
-    <div id="status" style="color: #00e676;">● SYSTEM ONLINE</div>
-</div>
+        .header {
+            border-bottom: 2px solid #333;
+            padding-bottom: 10px;
+            margin-bottom: 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
 
-<div id="alert-container">
-    <div class="empty-state">No active emergencies. Standing by...</div>
-</div>
+        .alert-card {
+            background: #1a1a1a;
+            padding: 20px;
+            margin-bottom: 15px;
+            border-radius: 4px;
+            display: flex;
+            justify-content: space-between;
+            animation: slideIn 0.3s ease-out;
+            border-left: 8px solid #444;
+            /* Default */
+        }
 
-<script>
-    async function fetchAlerts() {
-        try {
-            const response = await fetch('http://localhost:8080/api/alerts/active');
-            const alerts = await response.json();
-            const container = document.getElementById('alert-container');
+        /* Tactical Triage Colors */
+        .type-INTRUDER {
+            border-left-color: #ff5252;
+            background: rgba(255, 82, 82, 0.05);
+        }
 
-            if (alerts.length === 0) {
-                container.innerHTML = '<div class="empty-state">No active emergencies. Standing by...</div>';
-                return;
+        .type-MEDICAL {
+            border-left-color: #448aff;
+            background: rgba(68, 138, 255, 0.05);
+        }
+
+        .type-GENERAL {
+            border-left-color: #ffb74d;
+            background: rgba(255, 183, 77, 0.05);
+        }
+
+        .timestamp {
+            color: #888;
+            font-size: 12px;
+        }
+
+        .room-num {
+            font-size: 24px;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        /* Dispatch Button Styling */
+        .btn-dispatch {
+            background: #00e676;
+            color: black;
+            border: none;
+            padding: 8px 15px;
+            font-weight: bold;
+            cursor: pointer;
+            border-radius: 3px;
+        }
+
+        .btn-dispatch:hover {
+            background: #00c853;
+        }
+
+        .status-confirmed {
+            color: #00e676;
+            font-weight: bold;
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(-20px);
+                opacity: 0;
             }
 
-            container.innerHTML = ''; // Clear for update
-            alerts.forEach(alert => {
-                const time = new Date(alert.timestamp).toLocaleTimeString();
-                container.innerHTML += `
-                    <div class="alert-card priority-${alert.priority}">
-                        <div>
-                            <div class="timestamp">RECEIVED AT: ${time}</div>
-                            <div style="margin-top:5px;">${alert.payload}</div>
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        .empty-state {
+            text-align: center;
+            color: #444;
+            margin-top: 100px;
+            font-size: 20px;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="header">
+        <h1>VANGUARD GDC: LIVE MONITOR</h1>
+        <div id="status" style="color: #00e676;">● SYSTEM ONLINE</div>
+    </div>
+    <div id="protocol-sync-banner"
+        style="display: none; background: linear-gradient(90deg, #ff0000, #990000); color: white; padding: 20px; text-align: center; border-radius: 10px; margin-bottom: 20px; border: 2px solid #fff; animation: blinker 1.5s linear infinite;">
+        <h2 style="margin: 0; letter-spacing: 2px;">⚠️ VANGUARD PROTOCOL SYNC ACTIVE ⚠️</h2>
+        <p id="protocol-details" style="font-weight: bold; margin: 5px 0 0 0;">AUTOMATED LOCKDOWN INITIATED: CLUSTER
+            DETECTED IN WING A</p>
+    </div>
+
+    <style>
+        @keyframes blinker {
+            50% {
+                opacity: 0.7;
+            }
+        }
+    </style>
+
+    <div id="alert-container">
+        <div class="empty-state">No active emergencies. Standing by...</div>
+    </div>
+
+    <script>
+        async function dispatchHelp(alertId) {
+            try {
+                // Objective: Synchronize response by updating the server state
+                await fetch(`http://localhost:8080/api/alerts/${alertId}/dispatch`, {
+                    method: 'POST'
+                });
+                fetchAlerts(); // Immediate refresh for synchronization
+            } catch (e) {
+                console.error("Failed to sync dispatch status", e);
+            }
+        }
+
+        async function fetchAlerts() {
+            try {
+                const response = await fetch('http://localhost:8080/api/alerts/active');
+                const alerts = await response.json();
+                const container = document.getElementById('alert-container');
+                const banner = document.getElementById('protocol-sync-banner'); // Ensure this ID exists in your HTML
+                const details = document.getElementById('protocol-details');
+
+                // --- 1. CLUSTER DETECTION LOGIC (SYSTEM INTELLIGENCE) ---
+                const roomCounts = {};
+                let threatRoom = null;
+
+                alerts.forEach(a => {
+                    if (a.priority === 'INTRUDER') {
+                        roomCounts[a.roomNumber] = (roomCounts[a.roomNumber] || 0) + 1;
+                        if (roomCounts[a.roomNumber] >= 3) threatRoom = a.roomNumber;
+                    }
+                });
+
+                if (threatRoom && banner) {
+                    banner.style.display = 'block';
+                    details.innerText = `LOCKDOWN SYNCHRONIZED: 3+ REPORTS IDENTIFIED IN ROOM ${threatRoom}`;
+                } else if (banner) {
+                    banner.style.display = 'none';
+                }
+
+                // --- 2. RENDER ALERTS ---
+                if (alerts.length === 0) {
+                    container.innerHTML = '<div class="empty-state">No active emergencies. Standing by...</div>';
+                    return;
+                }
+
+                container.innerHTML = '';
+                alerts.forEach(alert => {
+                    const time = new Date(alert.timestamp).toLocaleTimeString();
+                    const isDispatched = alert.status === 'DISPATCHED';
+
+                    // Show the "Signal Path" to prove the Decentralized Bridge
+                    const pathStr = alert.hopHistory ? alert.hopHistory.join(' → ') : 'Direct Link';
+
+                    container.innerHTML += `
+                    <div class="alert-card type-${alert.priority || 'GENERAL'}">
+                        <div style="flex-grow: 1;">
+                            <div class="timestamp">
+                                RECEIVED: ${time} | ID: ${alert.uniqueId.substring(0, 8)}...
+                            </div>
+                            <div style="margin-top:5px; font-size: 1.1em;">
+                                <strong>[${alert.priority}]</strong> ${alert.payload}
+                            </div>
+                            <div style="font-size: 10px; color: #888; margin-top: 8px; font-family: monospace;">
+                                📡 BRIDGE PATH: ${pathStr}
+                            </div>
                         </div>
-                        <div style="text-align: right;">
-                            <div class="room-num">ROOM 402</div>
-                            <button style="background:#444; color:white; border:none; padding:5px 10px; cursor:pointer;">DISPATCHED</button>
+                        <div style="text-align: right; min-width: 150px;">
+                            <div class="room-num" style="color: ${alert.priority === 'INTRUDER' ? '#ff5252' : '#eee'}">
+                                ROOM ${alert.roomNumber || 'N/A'}
+                            </div>
+                            
+                            <div style="margin-top: 10px;">
+                                ${isDispatched ?
+                            '<div class="status-confirmed" style="color: #00e676; font-weight: bold;">✓ RESPONSE SYNCED</div>' :
+                            `<button class="btn-dispatch" onclick="dispatchHelp('${alert.uniqueId}')" 
+                                        style="background: #ff5252; color: white; border: none; padding: 8px 12px; cursor: pointer; border-radius: 4px;">
+                                        DISPATCH HELP
+                                    </button>`
+                        }
+                            </div>
                         </div>
                     </div>
                 `;
-            });
-        } catch (e) {
-            document.getElementById('status').innerHTML = '<span style="color:red;">● SERVER OFFLINE</span>';
-        }
-    }
+                });
 
-    // Refresh the dashboard every 3 seconds
-    setInterval(fetchAlerts, 3000);
-    fetchAlerts();
-</script>
+                document.getElementById('status').innerHTML = '<span style="color:#00e676;">● GDC CORE ONLINE</span>';
+            } catch (e) {
+                document.getElementById('status').innerHTML = '<span style="color:red;">● GDC CONNECTION LOST</span>';
+                console.error("Dashboard Fetch Error:", e);
+            }
+        }
+
+        // High-speed refresh for tactical synchronization
+        setInterval(fetchAlerts, 2000);
+        fetchAlerts();
+    </script>
 </body>
+
 </html>

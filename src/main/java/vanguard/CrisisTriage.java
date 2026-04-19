@@ -1,8 +1,12 @@
 package vanguard;
 
+import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 import java.util.UUID;
+import org.json.JSONArray;
+import org.json.JSONObject;
 
 /**
  * CrisisTriage implements a Priority Matrix to appropriately prioritize incoming emergency packets.
@@ -13,7 +17,6 @@ public class CrisisTriage {
     /**
      * Defines the Priority Matrix.
      * Higher priority value means higher urgency.
-     * Earthquake > Fire > Power Outage.
      */
     public enum Priority {
         NONE(0),
@@ -38,7 +41,7 @@ public class CrisisTriage {
 
     /**
      * Emergency packet containing a TTL and unique ID for deduplication,
-     * as strictly required by Vanguard-Total project rules.
+     * integrated with Tactical Intelligence fields for the Vanguard Dashboard.
      */
     public static class EmergencyPacket {
         private final String uniqueId;
@@ -48,18 +51,21 @@ public class CrisisTriage {
         private final String payload;
         private int ttlHops; // Hop counter for propagation tracking
 
+        // --- TACTICAL EXTENSIONS ---
+        private String status = "PENDING";       // PENDING, DISPATCHED
+        private String roomNumber = "402";      // Location tracking
+        private List<String> hopHistory = new ArrayList<>(); // Mesh path tracking
+
         public EmergencyPacket(Priority priority, String payload, long timeToLive, int ttlHops) {
-            // Requirement: unique ID for deduplication
             this.uniqueId = UUID.randomUUID().toString();
             this.priority = priority;
             this.payload = payload;
-            // Requirement: TTL Limits
             this.timeToLive = timeToLive;
             this.timestamp = System.currentTimeMillis();
             this.ttlHops = ttlHops;
         }
 
-        // Internal constructor for deserialization
+        // Constructor for deserialization
         private EmergencyPacket(String uniqueId, Priority priority, String payload, long timeToLive, long timestamp, int ttlHops) {
             this.uniqueId = uniqueId;
             this.priority = priority;
@@ -69,30 +75,20 @@ public class CrisisTriage {
             this.ttlHops = ttlHops;
         }
 
-        public String getUniqueId() {
-            return uniqueId;
-        }
-
-        public long getTimeToLive() {
-            return timeToLive;
-        }
-
-        public Priority getPriority() {
-            return priority;
-        }
-
-        public String getPayload() {
-            return payload;
-        }
-
-        public int getTtlHops() {
-            return ttlHops;
-        }
+        // Getters and Setters
+        public String getUniqueId() { return uniqueId; }
+        public long getTimeToLive() { return timeToLive; }
+        public Priority getPriority() { return priority; }
+        public String getPayload() { return payload; }
+        public int getTtlHops() { return ttlHops; }
+        public String getStatus() { return status; }
+        public void setStatus(String status) { this.status = status; }
+        public String getRoomNumber() { return roomNumber; }
+        public void setRoomNumber(String roomNumber) { this.roomNumber = roomNumber; }
+        public List<String> getHopHistory() { return hopHistory; }
 
         public void decrementTtlHops() {
-            if (this.ttlHops > 0) {
-                this.ttlHops--;
-            }
+            if (this.ttlHops > 0) this.ttlHops--;
         }
 
         public boolean isExpired() {
@@ -101,24 +97,26 @@ public class CrisisTriage {
 
         public String toJson() {
             try {
-                org.json.JSONObject obj = new org.json.JSONObject();
+                JSONObject obj = new JSONObject();
                 obj.put("uniqueId", uniqueId);
                 obj.put("priority", priority.name());
                 obj.put("payload", payload);
                 obj.put("timeToLive", timeToLive);
                 obj.put("timestamp", timestamp);
                 obj.put("ttlHops", ttlHops);
+                obj.put("status", status);
+                obj.put("roomNumber", roomNumber);
+                obj.put("hopHistory", new JSONArray(hopHistory));
                 return obj.toString();
             } catch (Exception e) {
-                e.printStackTrace();
                 return null;
             }
         }
 
         public static EmergencyPacket fromJson(String jsonString) {
             try {
-                org.json.JSONObject obj = new org.json.JSONObject(jsonString);
-                return new EmergencyPacket(
+                JSONObject obj = new JSONObject(jsonString);
+                EmergencyPacket packet = new EmergencyPacket(
                         obj.getString("uniqueId"),
                         Priority.valueOf(obj.getString("priority")),
                         obj.getString("payload"),
@@ -126,83 +124,73 @@ public class CrisisTriage {
                         obj.getLong("timestamp"),
                         obj.getInt("ttlHops")
                 );
+                if (obj.has("status")) packet.setStatus(obj.getString("status"));
+                if (obj.has("roomNumber")) packet.setRoomNumber(obj.getString("roomNumber"));
+                if (obj.has("hopHistory")) {
+                    JSONArray hops = obj.getJSONArray("hopHistory");
+                    for (int i = 0; i < hops.length(); i++) {
+                        packet.getHopHistory().add(hops.getString(i));
+                    }
+                }
+                return packet;
             } catch (Exception e) {
-                e.printStackTrace();
                 return null;
             }
         }
     }
 
-    private EmergencyPacket currentActiveAlert;
+    private final List<EmergencyPacket> activeAlerts;
     private final Set<String> processedPacketIds;
 
     public CrisisTriage() {
-        this.currentActiveAlert = null;
+        this.activeAlerts = new ArrayList<>();
         this.processedPacketIds = new HashSet<>();
     }
 
     /**
      * Process an incoming alert based on the Priority Matrix.
-     * Overrides lower-level alerts if an 'Earthquake' signal is detected.
+     * Manages deduplication, TTL, and sorting for the Dashboard.
      */
     public synchronized void processAlert(EmergencyPacket incomingPacket) {
         if (incomingPacket == null) return;
 
-        // Deduplication check
+        // 1. Deduplication check
         if (processedPacketIds.contains(incomingPacket.getUniqueId())) {
-            System.out.println("Duplicate packet ignored: " + incomingPacket.getUniqueId());
             return;
         }
         processedPacketIds.add(incomingPacket.getUniqueId());
 
+        // 2. TTL Expiry check
         if (incomingPacket.isExpired()) {
-            System.out.println("Expired packet discarded: " + incomingPacket.getPriority());
             return;
         }
 
-        // Clean up current alert if expired
-        if (currentActiveAlert != null && currentActiveAlert.isExpired()) {
-            currentActiveAlert = null;
-        }
-
-        if (currentActiveAlert == null) {
-            currentActiveAlert = incomingPacket;
-            System.out.println("New alert established: " + incomingPacket.getPriority());
-            return;
-        }
-
-        // Special rule for EARTHQUAKE overriding all lower-level alerts
-        if (incomingPacket.getPriority() == Priority.EARTHQUAKE) {
-            System.out.println("CRITICAL OVERRIDE: Earthquake detected! Overriding " + currentActiveAlert.getPriority());
-            currentActiveAlert = incomingPacket;
-            return;
-        }
-
-        // General priority comparison from Matrix
-        if (incomingPacket.getPriority().getLevel() > currentActiveAlert.getPriority().getLevel()) {
-            System.out.println("Higher priority alert detected. Overriding " + 
-                               currentActiveAlert.getPriority() + " -> " + incomingPacket.getPriority());
-            currentActiveAlert = incomingPacket;
-        } else {
-            System.out.println("Alert ignored. Current alert " + currentActiveAlert.getPriority() + 
-                               " is higher or equal to " + incomingPacket.getPriority());
-        }
+        // 3. Add to Registry & Sort by Priority (High to Low)
+        activeAlerts.add(incomingPacket);
+        activeAlerts.sort((a, b) -> b.getPriority().getLevel() - a.getPriority().getLevel());
+        
+        System.out.println("Vanguard Alert Registered: " + incomingPacket.getPriority());
     }
 
     /**
-     * Gets the currently active unexpired alert.
+     * Returns all currently active, unexpired alerts for the GDC Dashboard.
      */
-    public synchronized EmergencyPacket getCurrentActiveAlert() {
-        if (currentActiveAlert != null && currentActiveAlert.isExpired()) {
-            currentActiveAlert = null; // Clean up if expired
-        }
-        return currentActiveAlert;
+    public synchronized List<EmergencyPacket> getActiveAlerts() {
+        activeAlerts.removeIf(EmergencyPacket::isExpired);
+        return new ArrayList<>(activeAlerts);
     }
 
     /**
-     * Clears the current active alert manually.
+     * Manually update the status of an alert (e.g., Dispatching help).
      */
-    public synchronized void clearAlert() {
-        currentActiveAlert = null;
+    public synchronized void updateAlertStatus(String id, String newStatus) {
+        activeAlerts.stream()
+            .filter(a -> a.getUniqueId().equals(id))
+            .findFirst()
+            .ifPresent(a -> a.setStatus(newStatus));
+    }
+
+    public synchronized void clearAlerts() {
+        activeAlerts.clear();
     }
 }
