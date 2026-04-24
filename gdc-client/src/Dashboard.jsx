@@ -17,7 +17,10 @@ function Dashboard() {
   const [message, setMessage] = useState('')
   const [searchText, setSearchText] = useState('')
   const [statusFilter, setStatusFilter] = useState('ALL')
+  const [vulnFilter, setVulnFilter] = useState('ALL')
   const [history, setHistory] = useState([])
+  const [isLanActive, setIsLanActive] = useState(true)
+
 
   const fetchAlerts = async () => {
     setLoading(true)
@@ -25,12 +28,13 @@ function Dashboard() {
     setMessage('')
 
     try {
-      const response = await getAlerts()
+      const hId = localStorage.getItem('hotelId')
+      const response = await getAlerts(hId)
       const list = Array.isArray(response.data)
         ? response.data
         : response.data?.alerts || []
       setAlerts(list)
-      const historyResponse = await getAlertHistory()
+      const historyResponse = await getAlertHistory(hId)
       setHistory(Array.isArray(historyResponse.data) ? historyResponse.data : [])
     } catch (err) {
       setError(err.response?.data?.message || err.message || 'Failed to fetch alerts.')
@@ -42,6 +46,20 @@ function Dashboard() {
   useEffect(() => {
     fetchAlerts()
   }, [])
+
+  useEffect(() => {
+    const checkLan = async () => {
+      try {
+        const response = await fetch(`http://${window.location.hostname}:8080/api/alerts/ping`);
+        setIsLanActive(response.ok);
+      } catch {
+        setIsLanActive(false);
+      }
+    };
+    checkLan();
+    const interval = setInterval(checkLan, 5000);
+    return () => clearInterval(interval);
+  }, []);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -56,8 +74,9 @@ function Dashboard() {
       return undefined
     }
 
+    const hId = localStorage.getItem('hotelId')
     const stream = new EventSource(
-      `http://localhost:8080/api/alerts/stream?token=${encodeURIComponent(token)}`,
+      `http://localhost:8080/api/alerts/stream?token=${encodeURIComponent(token)}${hId ? `&hotelId=${encodeURIComponent(hId)}` : ''}`,
     )
 
     stream.onmessage = () => {
@@ -121,8 +140,14 @@ function Dashboard() {
       !query ||
       String(alert.userId ?? '').toLowerCase().includes(query) ||
       String(alert.id ?? '').toLowerCase().includes(query)
-    return matchesStatus && matchesQuery
+    
+    const matchesVuln = vulnFilter === 'ALL' || 
+                       (vulnFilter === 'VULNERABLE' && alert.vulnerabilityProfile && alert.vulnerabilityProfile !== 'NONE') ||
+                       alert.vulnerabilityProfile === vulnFilter;
+
+    return matchesStatus && matchesQuery && matchesVuln
   })
+
 
   const uniqueUsersCount = new Set(
     alerts
@@ -139,9 +164,15 @@ function Dashboard() {
           <h2 className="text-xl font-bold tracking-wide text-rose-400 md:text-2xl">
             VANGUARD GDC: LIVE MONITOR
           </h2>
-          <div className="inline-flex items-center gap-2 rounded-full border border-emerald-500/40 bg-emerald-500/10 px-3 py-1 text-sm font-semibold text-emerald-300">
-            <span className="inline-block h-2 w-2 rounded-full bg-emerald-400" />
-            SYSTEM ONLINE
+          <div className="flex items-center gap-3">
+             <div className="inline-flex items-center gap-2 rounded-full border border-emerald-500/40 bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-300">
+               <span className="inline-block h-2 w-2 rounded-full bg-emerald-400" />
+               SYS ONLINE
+             </div>
+             <div className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold ${isLanActive ? 'border-sky-500/40 bg-sky-500/10 text-sky-300' : 'border-rose-500/40 bg-rose-500/10 text-rose-300'}`}>
+               <span className={`inline-block h-2 w-2 rounded-full ${isLanActive ? 'bg-sky-400' : 'bg-rose-400 animate-pulse'}`} />
+               {isLanActive ? 'MESH GATEWAY: UP' : 'MESH GATEWAY: DOWN'}
+             </div>
           </div>
         </div>
         <div className="mb-4 flex flex-wrap gap-3">
@@ -174,30 +205,51 @@ function Dashboard() {
             onChange={(event) => setStatusFilter(event.target.value)}
             className="rounded-xl border border-zinc-700 bg-zinc-900 px-3 py-2.5 text-sm text-zinc-100 outline-none transition focus:border-rose-400 focus:ring-2 focus:ring-rose-400/20"
           >
-            <option value="ALL">All statuses</option>
-            <option value="PENDING">Pending</option>
-            <option value="ACKNOWLEDGED">Acknowledged</option>
             <option value="DISPATCHED">Dispatched</option>
             <option value="RESOLVED">Resolved</option>
           </select>
+          <select
+            value={vulnFilter}
+            onChange={(event) => setVulnFilter(event.target.value)}
+            className="rounded-xl border border-zinc-700 bg-zinc-900 px-3 py-2.5 text-sm text-zinc-100 outline-none transition focus:border-rose-400 focus:ring-2 focus:ring-rose-400/20"
+          >
+            <option value="ALL">All Guest Types</option>
+            <option value="VULNERABLE">All High Risk</option>
+            <option value="ELDERLY">Elderly</option>
+            <option value="MOBILITY">Mobility Impaired</option>
+            <option value="VISION">Vision Impaired</option>
+            <option value="VIP">VIP</option>
+          </select>
         </div>
 
-        <div className="mb-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <div className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-4">
-            <p className="text-xs uppercase tracking-wide text-zinc-500">Live Users</p>
-            <p className="mt-1 text-2xl font-bold text-sky-300">{uniqueUsersCount}</p>
+
+        <div className="mb-5 grid gap-3 lg:grid-cols-4">
+          <div className="col-span-1 lg:col-span-3 grid gap-3 grid-cols-2 lg:grid-cols-4">
+            <div className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-4">
+              <p className="text-xs uppercase tracking-wide text-zinc-500">Live Users</p>
+              <p className="mt-1 text-2xl font-bold text-sky-300">{uniqueUsersCount}</p>
+            </div>
+            <div className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-4">
+              <p className="text-xs uppercase tracking-wide text-zinc-500">Total Alerts</p>
+              <p className="mt-1 text-2xl font-bold text-zinc-100">{alerts.length}</p>
+            </div>
+            <div className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-4">
+              <p className="text-xs uppercase tracking-wide text-zinc-500">Pending Alerts</p>
+              <p className="mt-1 text-2xl font-bold text-amber-300">{pendingCount}</p>
+            </div>
+            <div className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-4">
+              <p className="text-xs uppercase tracking-wide text-zinc-500">Resolved Alerts</p>
+              <p className="mt-1 text-2xl font-bold text-emerald-300">{resolvedCount}</p>
+            </div>
           </div>
-          <div className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-4">
-            <p className="text-xs uppercase tracking-wide text-zinc-500">Total Alerts</p>
-            <p className="mt-1 text-2xl font-bold text-zinc-100">{alerts.length}</p>
-          </div>
-          <div className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-4">
-            <p className="text-xs uppercase tracking-wide text-zinc-500">Pending Alerts</p>
-            <p className="mt-1 text-2xl font-bold text-amber-300">{pendingCount}</p>
-          </div>
-          <div className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-4">
-            <p className="text-xs uppercase tracking-wide text-zinc-500">Resolved Alerts</p>
-            <p className="mt-1 text-2xl font-bold text-emerald-300">{resolvedCount}</p>
+          
+          <div className="col-span-1 border-2 border-rose-500/20 bg-black p-0 rounded-2xl relative overflow-hidden flex flex-col justify-center items-center h-[100px] lg:h-full group">
+             <div className="absolute top-2 left-3 flex items-center gap-2 z-10">
+                <span className="h-2 w-2 animate-pulse rounded-full bg-rose-500"></span>
+                <span className="text-[10px] font-black tracking-widest text-shadow text-white shadow-black drop-shadow-md">CCTV-NODE-01</span>
+             </div>
+             <img src="http://localhost:5000/video_feed" alt="" className="w-full h-full object-cover opacity-80 transition-opacity" onError={(e) => { e.target.style.display='none'; e.target.nextSibling.style.display='block'; }}/>
+             <div className="hidden text-[10px] text-zinc-600 font-bold tracking-widest uppercase">LINK OFFLINE</div>
           </div>
         </div>
 
@@ -218,14 +270,13 @@ function Dashboard() {
               <tr className="text-left text-sm text-zinc-300">
                 <th className="px-4 py-3">User ID</th>
                 <th className="px-4 py-3">Context</th>
-                <th className="px-4 py-3">Latitude</th>
-                <th className="px-4 py-3">Longitude</th>
+                <th className="px-4 py-3">Vulnerability</th>
                 <th className="px-4 py-3">Message</th>
-                <th className="px-4 py-3">Evidence</th>
                 <th className="px-4 py-3">Status</th>
                 <th className="px-4 py-3">Action</th>
               </tr>
             </thead>
+
             <tbody>
               {filteredAlerts.length === 0 ? (
                 <tr className="border-t border-zinc-800">
@@ -241,22 +292,21 @@ function Dashboard() {
                   >
                     <td className="px-4 py-3">{alert.userId ?? 'N/A'}</td>
                     <td className="px-4 py-3">{alert.contextType ?? 'GENERAL'}</td>
-                    <td className="px-4 py-3">{alert.latitude ?? 'N/A'}</td>
-                    <td className="px-4 py-3">{alert.longitude ?? 'N/A'}</td>
-                    <td className="max-w-[360px] px-4 py-3 text-zinc-300">
+                    <td className="px-4 py-3">
+                      {alert.vulnerabilityProfile && alert.vulnerabilityProfile !== 'NONE' ? (
+                        <span className="inline-flex rounded-lg border border-rose-500/50 bg-rose-500/20 px-2 py-1 text-[10px] font-black tracking-wider text-rose-300">
+                          ⚠️ {alert.vulnerabilityProfile}
+                        </span>
+                      ) : (
+                        <span className="text-zinc-500 text-xs">Standard</span>
+                      )}
+                    </td>
+                    <td className="max-w-[280px] px-4 py-3 text-zinc-300">
                       <p className="whitespace-pre-wrap break-words">
                         {alert.message?.trim() ? alert.message : 'No message'}
                       </p>
                     </td>
-                    <td className="px-4 py-3 text-xs text-zinc-300">
-                      {alert.evidenceUrl ? (
-                        <a href={alert.evidenceUrl} target="_blank" rel="noreferrer" className="text-sky-300 underline">
-                          View
-                        </a>
-                      ) : (
-                        'N/A'
-                      )}
-                    </td>
+
                     <td className="px-4 py-3">
                       <span
                         className={`inline-flex rounded-full border px-3 py-1 text-xs font-bold ${

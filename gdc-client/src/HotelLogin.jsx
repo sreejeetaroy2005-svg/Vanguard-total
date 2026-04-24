@@ -27,6 +27,7 @@ export default function HotelLogin() {
       // Success
       localStorage.setItem('token', 'hotel_admin_token_' + hId);
       localStorage.setItem('role', 'ADMIN');
+      localStorage.setItem('hotelId', hId);
       
       navigate('/dashboard');
     } catch (err) {

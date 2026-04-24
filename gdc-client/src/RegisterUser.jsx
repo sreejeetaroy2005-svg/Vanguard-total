@@ -14,7 +14,8 @@ function RegisterUser() {
     name: '',
     email: '',
     password: '',
-    roomNumber: ''
+    roomNumber: '',
+    hotelId: ''
   });
 
   const handleChange = (e) => {
@@ -35,10 +36,11 @@ function RegisterUser() {
         // Save the token for the session
         localStorage.setItem('token', user.accessToken);
         localStorage.setItem('role', 'GUEST');
+        localStorage.setItem('hotelId', formData.hotelId);
         
         await setDoc(doc(db, "customers", formData.email), {
           name: formData.name,
-          hotelId: formData.roomNumber,
+          hotelId: formData.hotelId,
           roomNumber: formData.roomNumber,
           password: formData.password, // Added for demo visibility in Firebase
           status: 'ACTIVE'
@@ -54,7 +56,7 @@ function RegisterUser() {
         // Write the metadata to Firestore directly during creation
         await setDoc(doc(db, "customers", formData.email), {
           name: formData.name,
-          hotelId: formData.roomNumber,
+          hotelId: formData.hotelId,
           roomNumber: formData.roomNumber,
           password: formData.password, // Added for demo visibility in Firebase
           status: 'ACTIVE'
@@ -93,6 +95,17 @@ function RegisterUser() {
                   type="text"
                   name="name"
                   placeholder="John Doe"
+                  required
+                  className="w-full rounded-xl border border-zinc-800 bg-zinc-950/50 px-4 py-3 text-zinc-200 outline-none transition focus:border-rose-500/50 focus:ring-1 focus:ring-rose-500/20"
+                  onChange={handleChange}
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold uppercase text-zinc-500">Hotel ID</label>
+                <input
+                  type="text"
+                  name="hotelId"
+                  placeholder="e.g. taj01"
                   required
                   className="w-full rounded-xl border border-zinc-800 bg-zinc-950/50 px-4 py-3 text-zinc-200 outline-none transition focus:border-rose-500/50 focus:ring-1 focus:ring-rose-500/20"
                   onChange={handleChange}

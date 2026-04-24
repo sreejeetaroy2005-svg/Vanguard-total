@@ -11,6 +11,9 @@ function UserSOS() {
   const [sosMessage, setSosMessage] = useState('')
   const [contextType, setContextType] = useState('GENERAL')
   const [evidenceUrl, setEvidenceUrl] = useState('')
+  const [vulnerability, setVulnerability] = useState('NONE')
+  const [isLanActive, setIsLanActive] = useState(true)
+
   const [latestStatus, setLatestStatus] = useState('')
   const [isRecording, setIsRecording] = useState(false)
   const [voiceError, setVoiceError] = useState('')
@@ -28,6 +31,20 @@ function UserSOS() {
     }, 1000)
     return () => clearInterval(timer)
   }, [])
+
+  useEffect(() => {
+    const checkLan = async () => {
+      try {
+        const response = await fetch(`http://${window.location.hostname}:8080/api/alerts/ping`);
+        setIsLanActive(response.ok);
+      } catch {
+        setIsLanActive(false);
+      }
+    };
+    checkLan();
+    const interval = setInterval(checkLan, 5000);
+    return () => clearInterval(interval);
+  }, []);
 
   useEffect(() => {
     const retryPendingAlerts = async () => {
@@ -157,7 +174,10 @@ function UserSOS() {
         message: translatedMessage,
         evidenceUrl: evidenceUrl.trim(),
         contextType,
+        vulnerabilityProfile: vulnerability,
+        hotelId: localStorage.getItem('hotelId'),
       }
+
 
       const response = await sendAlert(payload)
       setLatestStatus(response.data?.status || 'PENDING')
@@ -175,7 +195,10 @@ function UserSOS() {
         message: sosMessage.trim(),
         evidenceUrl: evidenceUrl.trim(),
         contextType,
+        vulnerabilityProfile: vulnerability,
+        hotelId: localStorage.getItem('hotelId'),
       }
+
       const existingQueue = JSON.parse(localStorage.getItem('pendingSosQueue') || '[]')
       existingQueue.push(payloadForQueue)
       localStorage.setItem('pendingSosQueue', JSON.stringify(existingQueue))
@@ -239,7 +262,9 @@ function UserSOS() {
         <div className="absolute -top-20 left-1/2 h-44 w-44 -translate-x-1/2 rounded-full bg-rose-500/20 blur-3xl" />
         <div className="flex h-8 items-center justify-between bg-zinc-900 px-5 text-xs text-zinc-400">
           <span>{clock}</span>
-          <span className="font-semibold text-rose-400">MESH ACTIVE</span>
+          <span className={`font-semibold ${isLanActive ? 'text-rose-400' : 'text-zinc-600'}`}>
+            {isLanActive ? 'LOCAL MESH ACTIVE' : 'MESH OFFLINE'}
+          </span>
         </div>
         <div className="flex h-[calc(100%-2rem)] flex-col justify-between px-6 py-8 text-center">
           <div>
@@ -270,6 +295,25 @@ function UserSOS() {
                   className="rounded-xl border border-zinc-700 bg-zinc-900 px-2 py-2 text-xs text-zinc-100 outline-none transition focus:border-rose-400 focus:ring-2 focus:ring-rose-400/20"
                 />
               </div>
+
+              <div className="mb-2">
+                <label className="mb-1 block text-left text-[10px] font-bold uppercase tracking-wider text-zinc-500">
+                  Opt-in Extra Assistance
+                </label>
+                <select
+                  value={vulnerability}
+                  onChange={(e) => setVulnerability(e.target.value)}
+                  className="w-full rounded-xl border border-zinc-700 bg-zinc-900 px-3 py-2 text-xs text-zinc-100 outline-none transition focus:border-rose-400 focus:ring-2 focus:ring-rose-400/20"
+                >
+                  <option value="NONE">No Special Assistance Needed</option>
+                  <option value="ELDERLY">Elderly Guest</option>
+                  <option value="MOBILITY">Mobility Impaired</option>
+                  <option value="VISION">Vision Impaired</option>
+                  <option value="HEARING">Hearing Impaired</option>
+                  <option value="VIP">VIP Guest</option>
+                </select>
+              </div>
+
               <textarea
                 value={sosMessage}
                 onChange={(event) => setSosMessage(event.target.value)}
@@ -323,8 +367,11 @@ function UserSOS() {
             ) : null}
           </div>
           <div>
-            <div className="mb-2.5 text-xs text-zinc-500">
-              Connected to GDC Gateway
+            <div className="mb-2.5 text-[10px] uppercase font-black tracking-widest flex items-center justify-center gap-1.5">
+              <span className={`h-1.5 w-1.5 rounded-full ${isLanActive ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'}`} />
+              <span className={isLanActive ? 'text-emerald-500' : 'text-rose-500'}>
+                {isLanActive ? 'SECURE LAN GATEWAY' : 'GATEWAY DISCONNECTED'}
+              </span>
             </div>
             <div className="flex gap-2">
               <button
