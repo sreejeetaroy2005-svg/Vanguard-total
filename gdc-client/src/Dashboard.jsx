@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   acknowledgeAlert,
+  broadcastMessage,
   dispatchAlert,
   getAlertHistory,
   getAlerts,
@@ -20,6 +21,7 @@ function Dashboard() {
   const [vulnFilter, setVulnFilter] = useState('ALL')
   const [history, setHistory] = useState([])
   const [isLanActive, setIsLanActive] = useState(true)
+  const [broadcastText, setBroadcastText] = useState('')
 
 
   const fetchAlerts = async () => {
@@ -29,13 +31,38 @@ function Dashboard() {
 
     try {
       const hId = localStorage.getItem('hotelId')
-      const response = await getAlerts(hId)
-      const list = Array.isArray(response.data)
-        ? response.data
-        : response.data?.alerts || []
-      setAlerts(list)
-      const historyResponse = await getAlertHistory(hId)
-      setHistory(Array.isArray(historyResponse.data) ? historyResponse.data : [])
+      
+      // Dual-Fetch Strategy: Ensure CCTV (GLOBAL) alerts appear even if backend sync is pending
+      const [res, globalRes] = await Promise.all([
+        getAlerts(hId),
+        getAlerts('GLOBAL')
+      ]);
+
+      const list = Array.isArray(res.data) ? res.data : (res.data?.alerts || []);
+      const globalList = Array.isArray(globalRes.data) ? globalRes.data : (globalRes.data?.alerts || []);
+      
+      // Merge and Deduplicate by uniqueId
+      const combined = [...list, ...globalList];
+      const uniqueMap = new Map();
+      combined.forEach(a => {
+        const key = a.uniqueId || a.id;
+        if (key && !uniqueMap.has(key)) {
+          uniqueMap.set(key, a);
+        }
+      });
+      
+      setAlerts(Array.from(uniqueMap.values()));
+
+      // History Sync
+      const [hRes, gHRes] = await Promise.all([
+          getAlertHistory(hId),
+          getAlertHistory('GLOBAL')
+      ]);
+      const combinedHistory = [
+          ...(Array.isArray(hRes.data) ? hRes.data : []),
+          ...(Array.isArray(gHRes.data) ? gHRes.data : [])
+      ];
+      setHistory(combinedHistory.sort((a,b) => (b.timestamp || 0) - (a.timestamp || 0)));
     } catch (err) {
       setError(err.response?.data?.message || err.message || 'Failed to fetch alerts.')
     } finally {
@@ -50,7 +77,8 @@ function Dashboard() {
   useEffect(() => {
     const checkLan = async () => {
       try {
-        const response = await fetch(`http://${window.location.hostname}:8080/api/alerts/ping`);
+        const host = window.location.hostname || 'localhost';
+        const response = await fetch(`http://${host}:8080/api/alerts/ping`);
         setIsLanActive(response.ok);
       } catch {
         setIsLanActive(false);
@@ -75,8 +103,9 @@ function Dashboard() {
     }
 
     const hId = localStorage.getItem('hotelId')
+    const streamHost = window.location.hostname || 'localhost';
     const stream = new EventSource(
-      `http://localhost:8080/api/alerts/stream?token=${encodeURIComponent(token)}${hId ? `&hotelId=${encodeURIComponent(hId)}` : ''}`,
+      `http://${streamHost}:8080/api/alerts/stream?token=${encodeURIComponent(token)}${hId ? `&hotelId=${encodeURIComponent(hId)}` : ''}`,
     )
 
     stream.onmessage = () => {
@@ -91,6 +120,12 @@ function Dashboard() {
           body: `${payload.userId || 'User'}: ${payload.message || 'Emergency alert'}`,
         })
       }
+    })
+
+    stream.addEventListener('BROADCAST_MESSAGE', (event) => {
+      // GDC Dashboard also sees the broadcast for confirmation
+      const payload = JSON.parse(event.data);
+      setMessage(`[CONFIRMED BROADCAST]: ${payload.message}`);
     })
 
     return () => stream.close()
@@ -117,6 +152,21 @@ function Dashboard() {
       await fetchAlerts()
     } catch (err) {
       setError(err.response?.data?.message || err.message || 'Status update failed.')
+    }
+  }
+
+  const handleBroadcast = async () => {
+    if (!broadcastText.trim()) return
+    setError('')
+    setMessage('')
+    try {
+      const hId = localStorage.getItem('hotelId')
+      await broadcastMessage(hId, broadcastText)
+      setMessage('Tactical broadcast sent to all facility guests.')
+      setBroadcastText('')
+    } catch (err) {
+      console.error('Full Broadcast Error Object:', err);
+      setError('Broadcast failure: ' + (err.response?.data?.message || err.message))
     }
   }
 
@@ -205,6 +255,8 @@ function Dashboard() {
             onChange={(event) => setStatusFilter(event.target.value)}
             className="rounded-xl border border-zinc-700 bg-zinc-900 px-3 py-2.5 text-sm text-zinc-100 outline-none transition focus:border-rose-400 focus:ring-2 focus:ring-rose-400/20"
           >
+            <option value="ALL">All Statuses</option>
+            <option value="PENDING">Pending</option>
             <option value="DISPATCHED">Dispatched</option>
             <option value="RESOLVED">Resolved</option>
           </select>
@@ -220,6 +272,29 @@ function Dashboard() {
             <option value="VISION">Vision Impaired</option>
             <option value="VIP">VIP</option>
           </select>
+        </div>
+
+        {/* TACTICAL BROADCAST SECTION */}
+        <div className="mb-6 rounded-2xl border-2 border-rose-500/30 bg-rose-500/5 p-5">
+           <div className="mb-3 flex items-center justify-between">
+              <h3 className="text-sm font-black tracking-widest text-rose-400">FACILITY-WIDE BROADCAST</h3>
+              <span className="text-[10px] font-bold text-rose-500 animate-pulse">CRITICAL UPLINK</span>
+           </div>
+           <div className="flex gap-3">
+              <input
+                type="text"
+                placeholder="TYPE EMERGENCY MESSAGE (e.g. EVACUATE TO NORTH EXIT)"
+                value={broadcastText}
+                onChange={(e) => setBroadcastText(e.target.value)}
+                className="flex-1 rounded-xl border border-rose-500/30 bg-black px-4 py-3 text-sm font-bold tracking-tight text-white outline-none focus:border-rose-500 focus:ring-1 focus:ring-rose-500/30"
+              />
+              <button
+                onClick={handleBroadcast}
+                className="rounded-xl bg-rose-600 px-6 py-3 text-xs font-black tracking-widest text-white transition hover:bg-rose-500 active:scale-95"
+              >
+                BROADCAST NOW
+              </button>
+           </div>
         </div>
 
 
@@ -248,7 +323,7 @@ function Dashboard() {
                 <span className="h-2 w-2 animate-pulse rounded-full bg-rose-500"></span>
                 <span className="text-[10px] font-black tracking-widest text-shadow text-white shadow-black drop-shadow-md">CCTV-NODE-01</span>
              </div>
-             <img src="http://localhost:5000/video_feed" alt="" className="w-full h-full object-cover opacity-80 transition-opacity" onError={(e) => { e.target.style.display='none'; e.target.nextSibling.style.display='block'; }}/>
+             <img src={`http://${window.location.hostname || 'localhost'}:5000/video_feed`} alt="" className="w-full h-full object-cover opacity-80 transition-opacity" onError={(e) => { e.target.style.display='none'; e.target.nextSibling.style.display='block'; }}/>
              <div className="hidden text-[10px] text-zinc-600 font-bold tracking-widest uppercase">LINK OFFLINE</div>
           </div>
         </div>

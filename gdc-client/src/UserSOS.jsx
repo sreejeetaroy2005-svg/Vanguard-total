@@ -13,6 +13,7 @@ function UserSOS() {
   const [evidenceUrl, setEvidenceUrl] = useState('')
   const [vulnerability, setVulnerability] = useState('NONE')
   const [isLanActive, setIsLanActive] = useState(true)
+  const [broadcastMsg, setBroadcastMsg] = useState('')
 
   const [latestStatus, setLatestStatus] = useState('')
   const [isRecording, setIsRecording] = useState(false)
@@ -35,7 +36,8 @@ function UserSOS() {
   useEffect(() => {
     const checkLan = async () => {
       try {
-        const response = await fetch(`http://${window.location.hostname}:8080/api/alerts/ping`);
+        const host = window.location.hostname || 'localhost';
+        const response = await fetch(`http://${host}:8080/api/alerts/ping`);
         setIsLanActive(response.ok);
       } catch {
         setIsLanActive(false);
@@ -45,6 +47,28 @@ function UserSOS() {
     const interval = setInterval(checkLan, 5000);
     return () => clearInterval(interval);
   }, []);
+
+  useEffect(() => {
+    const token = localStorage.getItem('token')
+    const hId = localStorage.getItem('hotelId')
+    if (!token) return
+
+    const streamHost = window.location.hostname || 'localhost';
+    const stream = new EventSource(
+      `http://${streamHost}:8080/api/alerts/stream?token=${encodeURIComponent(token)}${hId ? `&hotelId=${encodeURIComponent(hId)}` : ''}`
+    )
+
+    stream.addEventListener('BROADCAST_MESSAGE', (event) => {
+      try {
+        const payload = JSON.parse(event.data);
+        setBroadcastMsg(payload.message || 'CRITICAL TACTICAL UPDATE');
+      } catch {
+        setBroadcastMsg(event.data);
+      }
+    })
+
+    return () => stream.close()
+  }, [])
 
   useEffect(() => {
     const retryPendingAlerts = async () => {
@@ -244,6 +268,27 @@ function UserSOS() {
     } catch {
       return text
     }
+  }
+
+  // Intercept render if Broadcast is active
+  if (broadcastMsg) {
+    return (
+      <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-red-600 p-8 text-white">
+        <div className="absolute inset-0 animate-pulse bg-black/20" />
+        <div className="relative z-10 text-center">
+          <h1 className="mb-8 text-6xl font-black tracking-tighter uppercase animate-bounce">CRITICAL ALERT</h1>
+          <div className="mb-12 rounded-3xl border-4 border-white bg-black/40 p-10 text-4xl font-bold leading-tight shadow-2xl">
+            {broadcastMsg}
+          </div>
+          <button 
+            onClick={() => setBroadcastMsg('')}
+            className="rounded-full bg-white px-12 py-5 text-2xl font-black tracking-widest text-red-600 shadow-xl transition active:scale-95"
+          >
+            I UNDERSTAND
+          </button>
+        </div>
+      </div>
+    )
   }
 
   // Intercept render if Map is active

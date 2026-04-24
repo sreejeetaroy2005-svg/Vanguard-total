@@ -237,8 +237,7 @@ export default function HotelMapSystem({ onClose }) {
         <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
           <div style={{ width: 36, height: 36, borderRadius: 6, background: "linear-gradient(135deg,#003fa3,#0077e6)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, boxShadow: "0 0 14px #0044bb66" }}>🏨</div>
           <div>
-            <div style={{ fontSize: 20, fontWeight: 700, letterSpacing: 4, color: "#ddeeff", lineHeight: 1 }}>NEXUS GRAND</div>
-            <div style={{ fontSize: 10, color: "#3a6a9a", letterSpacing: 2.5, fontFamily: "'IBM Plex Mono',monospace" }}>EMERGENCY EVACUATION SYSTEM</div>
+            <div style={{ fontSize: 20, fontWeight: 700, letterSpacing: 4, color: "#ddeeff", lineHeight: 1 }}>EVACUATION PLAN</div>
           </div>
           {activePlan && (
             <div style={{ marginLeft: 20, padding: "4px 12px", borderRadius: 3, background: "#3d0e0e", border: "1px solid #831a1a", fontSize: 12, color: "#ff4444", letterSpacing: 1.5, animation: "blink 1.5s infinite", fontFamily: "'IBM Plex Mono',monospace" }}>
