@@ -14,6 +14,19 @@ public class EmergencyPacketDto {
     private String payload;    // Descriptive message
     private String status;     // PENDING, DISPATCHED, RESOLVED
     private String roomNumber; // Room identification for Cluster/Lockdown logic
+
+    // Dashboard UI Matchers
+    private String userId;
+    private String contextType;
+    private String message;
+    private String evidenceUrl;
+    private Double latitude;
+    private Double longitude;
+    private String hotelId;
+    
+    // Vulnerability Profiling
+    private String vulnerabilityProfile; // NONE, ELDERLY, MOBILITY, VISION, HEARING, VIP
+
     
     // Temporal Logic
     private long timestamp;    // Time of creation
@@ -76,4 +89,25 @@ public class EmergencyPacketDto {
     public boolean isExpired() {
         return (System.currentTimeMillis() - timestamp) > timeToLive;
     }
+
+    // Dashboard Compatibility Getters/Setters
+    public String getId() { return uniqueId; }
+    public String getUserId() { return userId; }
+    public void setUserId(String userId) { this.userId = userId; }
+    public String getContextType() { return contextType; }
+    public void setContextType(String contextType) { this.contextType = contextType; }
+    public String getMessage() { return message; }
+    public void setMessage(String message) { this.message = message; }
+    public String getEvidenceUrl() { return evidenceUrl; }
+    public void setEvidenceUrl(String evidenceUrl) { this.evidenceUrl = evidenceUrl; }
+    public Double getLatitude() { return latitude; }
+    public void setLatitude(Double latitude) { this.latitude = latitude; }
+    public Double getLongitude() { return longitude; }
+    public void setLongitude(Double longitude) { this.longitude = longitude; }
+
+    public String getHotelId() { return hotelId; }
+    public void setHotelId(String hotelId) { this.hotelId = hotelId; }
+
+    public String getVulnerabilityProfile() { return vulnerabilityProfile; }
+    public void setVulnerabilityProfile(String vulnerabilityProfile) { this.vulnerabilityProfile = vulnerabilityProfile; }
 }
