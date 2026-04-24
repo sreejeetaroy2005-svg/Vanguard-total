@@ -1,0 +1,16 @@
+@import "tailwindcss";
+
+/* Tactical Glow Override (Optional) */
+body {
+  background-color: #050505;
+  color: white;
+}
+@import url('https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css');
+
+/* Add these to fix the specific colors you used (Zinc and Rose) */
+body {
+  margin: 0;
+  background-color: #09090b; /* bg-zinc-950 */
+  color: #f4f4f5; /* text-zinc-100 */
+  font-family: sans-serif;
+}
