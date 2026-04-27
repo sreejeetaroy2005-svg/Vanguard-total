@@ -12,7 +12,7 @@ Vanguard-Total is engineered to function when everything else fails.
 
 ### 🧠 AI-Powered Tactical Intelligence
 - **Real-Time CCTV Surveillance:** Integrated Python/YOLO computer vision module for automated detection of weapons, violence, and environmental threats.
-- **Vertex AI (Gemini 3.1):** Advanced LLM-driven appraisal of emergency contexts, providing tailored guidance and automated situational reports.
+- **Vertex AI (Gemini 2.5 Flash):** Advanced LLM-driven appraisal of emergency contexts, providing tailored guidance and automated situational reports.
 - **Gemini Voice Assistant:** Hands-free emergency reporting and interactive crisis guidance.
 
 ### ♿ Inclusive Safety Design
@@ -31,7 +31,7 @@ Vanguard-Total is engineered to function when everything else fails.
 - **Backend:** Java 21 (Spring Boot)
 - **Frontend:** React + Vite (Tailwind / Vanilla CSS)
 - **Mobile Mesh:** Android SDK (Nearby API, ARCore)
-- **Intelligence:** Vertex AI (Gemini 3.1), YOLOv8, Flask
+- **Intelligence:** Vertex AI (Gemini 2.5 Flash), YOLOv8, Flask
 - **Data Persistence:** Firebase / Firestore
 
 ## 📂 Project Structure

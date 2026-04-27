@@ -41,24 +41,26 @@ public class AccessibilityLayer {
      */
     public void engageSubsystems(CrisisTriage.EmergencyPacket crisisAlert) {
         if (crisisAlert == null) return;
-        
+
         Log.i(TAG, "\n--- ENGAGING ACCESSIBILITY LAYER ---");
 
-        // 1. Mission - Accessibility Layer: Translation
+        // 1. Mission - Translation: localize raw English alert for the user's locale
         String rawInstruction = crisisAlert.getPayload();
-        String localizedInstruction = translator.localizeAlert(rawInstruction);
 
-        // 2. Mission - Accessibility Layer: Haptics
-        if (crisisAlert.getPriority() == CrisisTriage.Priority.FIRE || 
+        // 2. Mission - Haptics: tactile urgency signal
+        if (crisisAlert.getPriority() == CrisisTriage.Priority.FIRE ||
             crisisAlert.getPriority() == CrisisTriage.Priority.EARTHQUAKE) {
             haptics.triggerEvacuateHaptics();
         } else if (crisisAlert.getPriority() == CrisisTriage.Priority.WEAPONS) {
             haptics.triggerShelterHaptics();
         }
 
-        // 3. Mission - Accessibility Layer: Gemini Voice Assistant
+        // 3. Mission - Gemini Voice Assistant
+        //    a) Brief Gemini on the current emergency so follow-up questions are grounded
+        voiceAssistant.injectEmergencyContext(crisisAlert);
+        //    b) Translate and immediately speak the alert for elderly/visually impaired users
         if (isElderlyOrVisuallyImpaired) {
-            voiceAssistant.speakInstruction(localizedInstruction);
+            translator.translateAndSpeak(rawInstruction, voiceAssistant);
         }
 
         // 4. Mission - Immersive Guide (AR vs Map)
@@ -66,11 +68,11 @@ public class AccessibilityLayer {
             // Responders see 3D full floor heatmap
             mapManager.renderLiveHeatmap(Collections.singletonList(crisisAlert));
         } else {
-            // Guests see floor AR arrows guiding them safely out
+            // Guests see AR arrows guiding them to the nearest exit
             float headingToExit = calculateExitVector();
             arNavigator.projectGreenArrows(headingToExit);
         }
-        
+
         Log.i(TAG, "--- ACCESSIBILITY LAYER FULLY DEPLOYED ---\n");
     }
 

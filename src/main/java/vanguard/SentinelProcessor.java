@@ -9,15 +9,15 @@ import com.google.cloud.vertexai.generativeai.ResponseHandler;
 import java.io.IOException;
 
 /**
- * SentinelProcessor connects to live stream metadata and uses Gemini 3.1 
+ * SentinelProcessor connects to live stream metadata and uses Gemini 2.5 Flash
  * to classify anomalies such as Smoke, Weapons, Crowd-Panic, and Structural Vibration.
  */
 public class SentinelProcessor {
 
-    // Using Gemini 3.1 model as specified
-    private static final String MODEL_NAME = "gemini-3.1-pro";
+    // Using Gemini 2.5 Flash - fast, cost-efficient, ideal for real-time stream analysis
+    private static final String MODEL_NAME = "gemini-2.5-flash";
 
-    // System prompt specifically crafted for Gemini 3.1 anomaly classification
+    // System prompt for anomaly classification
     public static final String SYSTEM_PROMPT = 
         "You are Sentinel, an advanced security classification AI. " +
         "Your objective is to monitor incoming live stream metadata and identify key anomalies. " +
