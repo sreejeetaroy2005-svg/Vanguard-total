@@ -1,0 +1,15 @@
+{
+  "files": {
+    "main.css": "/Vanguard-total/static/css/main.ac5b766e.css",
+    "main.js": "/Vanguard-total/static/js/main.33a2dace.js",
+    "static/js/453.692ed8de.chunk.js": "/Vanguard-total/static/js/453.692ed8de.chunk.js",
+    "index.html": "/Vanguard-total/index.html",
+    "main.ac5b766e.css.map": "/Vanguard-total/static/css/main.ac5b766e.css.map",
+    "main.33a2dace.js.map": "/Vanguard-total/static/js/main.33a2dace.js.map",
+    "453.692ed8de.chunk.js.map": "/Vanguard-total/static/js/453.692ed8de.chunk.js.map"
+  },
+  "entrypoints": [
+    "static/css/main.ac5b766e.css",
+    "static/js/main.33a2dace.js"
+  ]
+}
