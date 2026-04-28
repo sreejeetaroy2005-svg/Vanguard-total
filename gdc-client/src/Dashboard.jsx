@@ -1,449 +1,231 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import {
-  acknowledgeAlert,
-  broadcastMessage,
-  dispatchAlert,
-  getAlertHistory,
-  getAlerts,
-  logout,
-  resolveAlert,
-} from './api'
+import { db } from './firebase'
+import { 
+  collection, 
+  onSnapshot, 
+  query, 
+  where, 
+  addDoc, 
+  updateDoc, 
+  doc, 
+  setDoc,
+  serverTimestamp,
+  orderBy
+} from 'firebase/firestore'
+import { pathfinder } from './utils/pathfinder'
 
-function Dashboard() {
-  const navigate = useNavigate()
+const Dashboard = () => {
   const [alerts, setAlerts] = useState([])
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const [message, setMessage] = useState('')
-  const [searchText, setSearchText] = useState('')
-  const [statusFilter, setStatusFilter] = useState('ALL')
-  const [vulnFilter, setVulnFilter] = useState('ALL')
-  const [history, setHistory] = useState([])
-  const [isLanActive, setIsLanActive] = useState(true)
   const [broadcastText, setBroadcastText] = useState('')
+  const [heading, setHeading] = useState(0)
+  const [nextWaypoint, setNextWaypoint] = useState('')
+  
+  const hotelId = localStorage.getItem('hotelId') || 'GLOBAL'
 
-
-  const fetchAlerts = async () => {
-    setLoading(true)
-    setError('')
-    setMessage('')
-
-    try {
-      const hId = localStorage.getItem('hotelId')
-      
-      // Dual-Fetch Strategy: Ensure CCTV (GLOBAL) alerts appear even if backend sync is pending
-      const [res, globalRes] = await Promise.all([
-        getAlerts(hId),
-        getAlerts('GLOBAL')
-      ]);
-
-      const list = Array.isArray(res.data) ? res.data : (res.data?.alerts || []);
-      const globalList = Array.isArray(globalRes.data) ? globalRes.data : (globalRes.data?.alerts || []);
-      
-      // Merge and Deduplicate by uniqueId
-      const combined = [...list, ...globalList];
-      const uniqueMap = new Map();
-      combined.forEach(a => {
-        const key = a.uniqueId || a.id;
-        if (key && !uniqueMap.has(key)) {
-          uniqueMap.set(key, a);
-        }
-      });
-      
-      setAlerts(Array.from(uniqueMap.values()));
-
-      // History Sync
-      const [hRes, gHRes] = await Promise.all([
-          getAlertHistory(hId),
-          getAlertHistory('GLOBAL')
-      ]);
-      const combinedHistory = [
-          ...(Array.isArray(hRes.data) ? hRes.data : []),
-          ...(Array.isArray(gHRes.data) ? gHRes.data : [])
-      ];
-      setHistory(combinedHistory.sort((a,b) => (b.timestamp || 0) - (a.timestamp || 0)));
-    } catch (err) {
-      setError(err.response?.data?.message || err.message || 'Failed to fetch alerts.')
-    } finally {
+  // 1. REAL-TIME SUBSCRIPTION
+  useEffect(() => {
+    const alertsRef = collection(db, 'alerts')
+    // Subscribe to both current hotel alerts and GLOBAL alerts
+    const q = query(alertsRef, orderBy('timestamp', 'desc'))
+    
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const alertList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+      // Filter in JS since Firestore doesn't support complex OR queries easily without indexes
+      const filtered = alertList.filter(a => a.hotelId === hotelId || a.hotelId === 'GLOBAL')
+      setAlerts(filtered)
       setLoading(false)
+      
+      // Update Pathfinder with active hazards
+      pathfinder.clearHazards()
+      filtered.forEach(a => {
+        if (a.status !== 'RESOLVED') pathfinder.markHazard(a.roomNumber)
+      })
+      
+      calculateLocalPath()
+    }, (err) => {
+      setError('Uplink Failed: ' + err.message)
+      setLoading(false)
+    })
+
+    return () => unsubscribe()
+  }, [hotelId])
+
+  const calculateLocalPath = () => {
+    const path = pathfinder.findSafePath('R301')
+    if (path.length >= 2) {
+      const from = path[0]
+      const to = path[1]
+      const angle = Math.atan2(to.y - from.y, to.x - from.x) * (180 / Math.PI)
+      setHeading(angle)
+      setNextWaypoint(to.label)
+    } else {
+      setHeading(0)
+      setNextWaypoint('STAY IN PLACE')
     }
   }
 
-  useEffect(() => {
-    fetchAlerts()
-  }, [])
-
-  useEffect(() => {
-    const checkLan = async () => {
-      try {
-        const host = window.location.hostname || 'localhost';
-        const response = await fetch(`http://${host}:8080/api/alerts/ping`);
-        setIsLanActive(response.ok);
-      } catch {
-        setIsLanActive(false);
-      }
-    };
-    checkLan();
-    const interval = setInterval(checkLan, 5000);
-    return () => clearInterval(interval);
-  }, []);
-
-  useEffect(() => {
-    const timer = setInterval(() => {
-      fetchAlerts()
-    }, 10000)
-    return () => clearInterval(timer)
-  }, [])
-
-  useEffect(() => {
-    const token = localStorage.getItem('token')
-    if (!token) {
-      return undefined
-    }
-
-    const hId = localStorage.getItem('hotelId')
-    const streamHost = window.location.hostname || 'localhost';
-    const stream = new EventSource(
-      `http://${streamHost}:8080/api/alerts/stream?token=${encodeURIComponent(token)}${hId ? `&hotelId=${encodeURIComponent(hId)}` : ''}`,
-    )
-
-    stream.onmessage = () => {
-      fetchAlerts()
-    }
-
-    stream.addEventListener('NEW_ALERT', (event) => {
-      fetchAlerts()
-      if (Notification?.permission === 'granted') {
-        const payload = JSON.parse(event.data)
-        new Notification('New SOS Alert', {
-          body: `${payload.userId || 'User'}: ${payload.message || 'Emergency alert'}`,
-        })
-      }
-    })
-
-    stream.addEventListener('BROADCAST_MESSAGE', (event) => {
-      // GDC Dashboard also sees the broadcast for confirmation
-      const payload = JSON.parse(event.data);
-      setMessage(`[CONFIRMED BROADCAST]: ${payload.message}`);
-    })
-
-    return () => stream.close()
-  }, [])
-
-  useEffect(() => {
-    if ('Notification' in window && Notification.permission === 'default') {
-      Notification.requestPermission()
-    }
-  }, [])
-
-  const handleStatusUpdate = async (id, nextAction) => {
-    setError('')
-    setMessage('')
+  const handleStatusUpdate = async (alertId, newStatus) => {
     try {
-      if (nextAction === 'ACKNOWLEDGED') {
-        await acknowledgeAlert(id)
-      } else if (nextAction === 'DISPATCHED') {
-        await dispatchAlert(id)
-      } else {
-        await resolveAlert(id)
-      }
-      setMessage(`Alert marked as ${nextAction}.`)
-      await fetchAlerts()
+      const alertRef = doc(db, 'alerts', alertId)
+      await updateDoc(alertRef, { status: newStatus })
     } catch (err) {
-      setError(err.response?.data?.message || err.message || 'Status update failed.')
+      setError('Update Denied: ' + err.message)
     }
   }
 
   const handleBroadcast = async () => {
     if (!broadcastText.trim()) return
-    setError('')
-    setMessage('')
     try {
-      const hId = localStorage.getItem('hotelId')
-      await broadcastMessage(hId, broadcastText)
-      setMessage('Tactical broadcast sent to all facility guests.')
+      await addDoc(collection(db, 'alerts'), {
+        uniqueId: 'BCAST-' + Date.now(),
+        message: 'GDC BROADCAST: ' + broadcastText,
+        priority: 'NONE',
+        status: 'PENDING',
+        hotelId: hotelId,
+        timestamp: Date.now(),
+        userId: 'GDC-CONSOLE'
+      })
       setBroadcastText('')
     } catch (err) {
-      console.error('Full Broadcast Error Object:', err);
-      setError('Broadcast failure: ' + (err.response?.data?.message || err.message))
+      setError('Broadcast Failed: ' + err.message)
     }
   }
 
-  const handleLogout = async () => {
-    try {
-      await logout()
-    } catch {
-      // Ignore logout network errors and clear local session.
-    }
-    localStorage.removeItem('token')
-    localStorage.removeItem('refreshToken')
-    localStorage.removeItem('role')
-    navigate('/login')
-  }
-
-  const filteredAlerts = alerts.filter((alert) => {
-    const status = alert.status ?? 'PENDING'
-    const matchesStatus = statusFilter === 'ALL' || status === statusFilter
-    const query = searchText.trim().toLowerCase()
-    const matchesQuery =
-      !query ||
-      String(alert.userId ?? '').toLowerCase().includes(query) ||
-      String(alert.id ?? '').toLowerCase().includes(query)
-    
-    const matchesVuln = vulnFilter === 'ALL' || 
-                       (vulnFilter === 'VULNERABLE' && alert.vulnerabilityProfile && alert.vulnerabilityProfile !== 'NONE') ||
-                       alert.vulnerabilityProfile === vulnFilter;
-
-    return matchesStatus && matchesQuery && matchesVuln
-  })
-
-
-  const uniqueUsersCount = new Set(
-    alerts
-      .map((alert) => alert.userId)
-      .filter((userId) => userId && userId !== 'anonymous-user'),
-  ).size
-  const pendingCount = alerts.filter((alert) => (alert.status ?? 'PENDING') !== 'RESOLVED').length
-  const resolvedCount = alerts.filter((alert) => alert.status === 'RESOLVED').length
+  const activeThreats = alerts.filter(a => a.status !== 'RESOLVED' && a.priority !== 'NONE')
 
   return (
-    <div className="mx-auto min-h-screen w-full max-w-6xl px-4 py-8 md:px-6">
-      <div className="rounded-3xl border border-zinc-800 bg-zinc-950/90 p-5 shadow-[0_25px_80px_rgba(0,0,0,0.65)] md:p-7">
-        <div className="mb-6 flex flex-col gap-3 border-b border-zinc-800 pb-4 md:flex-row md:items-center md:justify-between">
-          <h2 className="text-xl font-bold tracking-wide text-rose-400 md:text-2xl">
-            VANGUARD GDC: LIVE MONITOR
-          </h2>
-          <div className="flex items-center gap-3">
-             <div className="inline-flex items-center gap-2 rounded-full border border-emerald-500/40 bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-300">
-               <span className="inline-block h-2 w-2 rounded-full bg-emerald-400" />
-               SYS ONLINE
+    <div className="min-h-screen bg-black text-white p-4 lg:p-8 hud-font selection:bg-rose-500/30">
+      {/* TOP HUD BAR */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+        <div className="tactical-glass p-5 rounded-2xl flex flex-col justify-center border-l-4 border-l-rose-500 scanline-container">
+          <p className="text-[10px] font-black tracking-[0.2em] text-rose-500 mb-1">ACTIVE THREATS</p>
+          <p className="text-4xl font-black">{activeThreats.length}</p>
+        </div>
+        <div className="tactical-glass p-5 rounded-2xl flex flex-col justify-center border-l-4 border-l-sky-500">
+          <p className="text-[10px] font-black tracking-[0.2em] text-sky-500 mb-1">FIREBASE UPLINK</p>
+          <p className="text-4xl font-black">ACTIVE</p>
+        </div>
+        <div className="tactical-glass p-5 rounded-2xl flex flex-col justify-center border-l-4 border-l-amber-500">
+          <p className="text-[10px] font-black tracking-[0.2em] text-amber-500 mb-1">GUESTS AT RISK</p>
+          <p className="text-4xl font-black">{activeThreats.length}</p>
+        </div>
+        <div className="tactical-glass p-5 rounded-2xl flex flex-col justify-center border-l-4 border-l-zinc-500">
+          <p className="text-[10px] font-black tracking-[0.2em] text-zinc-400 mb-1">SYSTEM STATUS</p>
+          <p className="text-xl font-bold text-emerald-400">SERVERLESS / READY</p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+        {/* LEFT COLUMN: LIVE FEED & TACTICAL MAP */}
+        <div className="lg:col-span-4 space-y-8">
+          <div className="tactical-glass rounded-3xl overflow-hidden relative group">
+             <div className="absolute top-4 left-4 z-10 flex items-center gap-2">
+                <span className="h-2 w-2 bg-rose-500 rounded-full animate-ping"></span>
+                <span className="text-[10px] font-black tracking-widest text-white drop-shadow-md">LIVE CCTV (LOCAL NODE)</span>
              </div>
-             <div className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold ${isLanActive ? 'border-sky-500/40 bg-sky-500/10 text-sky-300' : 'border-rose-500/40 bg-rose-500/10 text-rose-300'}`}>
-               <span className={`inline-block h-2 w-2 rounded-full ${isLanActive ? 'bg-sky-400' : 'bg-rose-400 animate-pulse'}`} />
-               {isLanActive ? 'MESH GATEWAY: UP' : 'MESH GATEWAY: DOWN'}
+             <img 
+               src={`http://localhost:5000/video_feed`} 
+               alt="AI Stream" 
+               className="w-full aspect-video object-cover grayscale brightness-75 hover:grayscale-0 transition-all duration-700"
+               onError={(e) => e.target.src = "https://images.unsplash.com/photo-1557683316-973673baf926?q=80&w=1000&auto=format&fit=crop"}
+             />
+             <div className="p-4 border-t border-white/5 bg-white/5">
+                <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest">Mixed Content Warning: local camera stream requires allow-insecure-content</p>
              </div>
           </div>
-        </div>
-        <div className="mb-4 flex flex-wrap gap-3">
-          <button
-            type="button"
-            onClick={fetchAlerts}
-            disabled={loading}
-            className="rounded-xl bg-rose-500 px-4 py-2 font-semibold text-white transition hover:bg-rose-600 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {loading ? 'Refreshing...' : 'Refresh Alerts'}
-          </button>
-          <button
-            type="button"
-            onClick={handleLogout}
-            className="rounded-xl border border-zinc-700 bg-zinc-900 px-4 py-2 font-semibold text-zinc-200 transition hover:bg-zinc-800"
-          >
-            Logout
-          </button>
-        </div>
-        <div className="mb-4 grid gap-3 md:grid-cols-3">
-          <input
-            type="text"
-            placeholder="Search by User ID or Alert ID"
-            value={searchText}
-            onChange={(event) => setSearchText(event.target.value)}
-            className="md:col-span-2 rounded-xl border border-zinc-700 bg-zinc-900 px-3 py-2.5 text-sm text-zinc-100 outline-none transition focus:border-rose-400 focus:ring-2 focus:ring-rose-400/20"
-          />
-          <select
-            value={statusFilter}
-            onChange={(event) => setStatusFilter(event.target.value)}
-            className="rounded-xl border border-zinc-700 bg-zinc-900 px-3 py-2.5 text-sm text-zinc-100 outline-none transition focus:border-rose-400 focus:ring-2 focus:ring-rose-400/20"
-          >
-            <option value="ALL">All Statuses</option>
-            <option value="PENDING">Pending</option>
-            <option value="DISPATCHED">Dispatched</option>
-            <option value="RESOLVED">Resolved</option>
-          </select>
-          <select
-            value={vulnFilter}
-            onChange={(event) => setVulnFilter(event.target.value)}
-            className="rounded-xl border border-zinc-700 bg-zinc-900 px-3 py-2.5 text-sm text-zinc-100 outline-none transition focus:border-rose-400 focus:ring-2 focus:ring-rose-400/20"
-          >
-            <option value="ALL">All Guest Types</option>
-            <option value="VULNERABLE">All High Risk</option>
-            <option value="ELDERLY">Elderly</option>
-            <option value="MOBILITY">Mobility Impaired</option>
-            <option value="VISION">Vision Impaired</option>
-            <option value="VIP">VIP</option>
-          </select>
-        </div>
 
-        {/* TACTICAL BROADCAST SECTION */}
-        <div className="mb-6 rounded-2xl border-2 border-rose-500/30 bg-rose-500/5 p-5">
-           <div className="mb-3 flex items-center justify-between">
-              <h3 className="text-sm font-black tracking-widest text-rose-400">FACILITY-WIDE BROADCAST</h3>
-              <span className="text-[10px] font-bold text-rose-500 animate-pulse">CRITICAL UPLINK</span>
-           </div>
-           <div className="flex gap-3">
-              <input
-                type="text"
-                placeholder="TYPE EMERGENCY MESSAGE (e.g. EVACUATE TO NORTH EXIT)"
-                value={broadcastText}
-                onChange={(e) => setBroadcastText(e.target.value)}
-                className="flex-1 rounded-xl border border-rose-500/30 bg-black px-4 py-3 text-sm font-bold tracking-tight text-white outline-none focus:border-rose-500 focus:ring-1 focus:ring-rose-500/30"
-              />
-              <button
-                onClick={handleBroadcast}
-                className="rounded-xl bg-rose-600 px-6 py-3 text-xs font-black tracking-widest text-white transition hover:bg-rose-500 active:scale-95"
-              >
-                BROADCAST NOW
-              </button>
-           </div>
-        </div>
-
-
-        <div className="mb-5 grid gap-3 lg:grid-cols-4">
-          <div className="col-span-1 lg:col-span-3 grid gap-3 grid-cols-2 lg:grid-cols-4">
-            <div className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-4">
-              <p className="text-xs uppercase tracking-wide text-zinc-500">Live Users</p>
-              <p className="mt-1 text-2xl font-bold text-sky-300">{uniqueUsersCount}</p>
-            </div>
-            <div className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-4">
-              <p className="text-xs uppercase tracking-wide text-zinc-500">Total Alerts</p>
-              <p className="mt-1 text-2xl font-bold text-zinc-100">{alerts.length}</p>
-            </div>
-            <div className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-4">
-              <p className="text-xs uppercase tracking-wide text-zinc-500">Pending Alerts</p>
-              <p className="mt-1 text-2xl font-bold text-amber-300">{pendingCount}</p>
-            </div>
-            <div className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-4">
-              <p className="text-xs uppercase tracking-wide text-zinc-500">Resolved Alerts</p>
-              <p className="mt-1 text-2xl font-bold text-emerald-300">{resolvedCount}</p>
-            </div>
-          </div>
-          
-          <div className="col-span-1 border-2 border-rose-500/20 bg-black p-0 rounded-2xl relative overflow-hidden flex flex-col justify-center items-center h-[100px] lg:h-full group">
-             <div className="absolute top-2 left-3 flex items-center gap-2 z-10">
-                <span className="h-2 w-2 animate-pulse rounded-full bg-rose-500"></span>
-                <span className="text-[10px] font-black tracking-widest text-shadow text-white shadow-black drop-shadow-md">CCTV-NODE-01</span>
+          <div className="tactical-glass rounded-3xl p-6 relative">
+             <h3 className="hud-title text-sm text-sky-400 mb-4">Local SafePath (In-Browser Calculaion)</h3>
+             <div className="aspect-square rounded-2xl bg-zinc-900 border border-white/5 flex flex-col items-center justify-center p-8 text-center relative overflow-hidden">
+                <div 
+                   className="w-full flex justify-center mb-4 transition-transform duration-1000"
+                   style={{ transform: `rotate(${heading || 0}deg)` }}
+                >
+                   <div className="w-2 h-16 bg-emerald-500 rounded-full shadow-[0_0_20px_#10b981] animate-bounce"></div>
+                </div>
+                <div className="relative z-10">
+                   <p className="text-xs font-bold text-emerald-300 mb-1 uppercase tracking-widest">
+                     {heading ? 'Safe Exit Vector Calculated' : 'Pathfinding Standby'}
+                   </p>
+                   <p className="text-[10px] text-zinc-500 uppercase">Heading: {heading?.toFixed(1) || '0.0'}° | {nextWaypoint || 'WAITING'}</p>
+                </div>
              </div>
-             <img src={`http://${window.location.hostname || 'localhost'}:5000/video_feed`} alt="" className="w-full h-full object-cover opacity-80 transition-opacity" onError={(e) => { e.target.style.display='none'; e.target.nextSibling.style.display='block'; }}/>
-             <div className="hidden text-[10px] text-zinc-600 font-bold tracking-widest uppercase">LINK OFFLINE</div>
+          </div>
+
+          <div className="tactical-glass rounded-3xl p-6">
+             <h3 className="hud-title text-sm text-rose-400 mb-4">Cloud Broadcast</h3>
+             <textarea 
+               value={broadcastText}
+               onChange={(e) => setBroadcastText(e.target.value)}
+               placeholder="TYPE TACTICAL DIRECTIVE..."
+               className="w-full bg-black/50 border border-white/10 rounded-xl p-4 text-sm text-white focus:border-rose-500 outline-none h-24 mb-3"
+             />
+             <button 
+               onClick={handleBroadcast}
+               className="w-full py-4 bg-rose-600 hover:bg-rose-500 text-[10px] font-black tracking-[0.3em] uppercase rounded-xl transition-all active:scale-95"
+             >
+                Sync to All Nodes
+             </button>
           </div>
         </div>
 
-        {message ? (
-          <p className="mb-3 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-300">
-            {message}
-          </p>
-        ) : null}
-        {error ? (
-          <p className="mb-3 rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-300">
-            {error}
-          </p>
-        ) : null}
+        {/* RIGHT COLUMN: ALERT TRIAGE FEED */}
+        <div className="lg:col-span-8 flex flex-col h-full">
+          <div className="flex items-center justify-between mb-6">
+             <h2 className="text-2xl font-black hud-title tracking-tighter">
+                Firebase <span className="text-rose-500">Live</span> Feed
+             </h2>
+          </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[1020px] border-collapse overflow-hidden rounded-xl border border-zinc-800">
-            <thead className="bg-zinc-900">
-              <tr className="text-left text-sm text-zinc-300">
-                <th className="px-4 py-3">User ID</th>
-                <th className="px-4 py-3">Context</th>
-                <th className="px-4 py-3">Vulnerability</th>
-                <th className="px-4 py-3">Message</th>
-                <th className="px-4 py-3">Status</th>
-                <th className="px-4 py-3">Action</th>
-              </tr>
-            </thead>
-
-            <tbody>
-              {filteredAlerts.length === 0 ? (
-                <tr className="border-t border-zinc-800">
-                  <td colSpan="8" className="px-4 py-8 text-center text-zinc-500">
-                    No active alerts found.
-                  </td>
-                </tr>
-              ) : (
-                filteredAlerts.map((alert) => (
-                  <tr
-                    key={alert.id}
-                    className="border-t border-zinc-800 text-sm text-zinc-200 transition hover:bg-zinc-900/70"
-                  >
-                    <td className="px-4 py-3">{alert.userId ?? 'N/A'}</td>
-                    <td className="px-4 py-3">{alert.contextType ?? 'GENERAL'}</td>
-                    <td className="px-4 py-3">
-                      {alert.vulnerabilityProfile && alert.vulnerabilityProfile !== 'NONE' ? (
-                        <span className="inline-flex rounded-lg border border-rose-500/50 bg-rose-500/20 px-2 py-1 text-[10px] font-black tracking-wider text-rose-300">
-                          ⚠️ {alert.vulnerabilityProfile}
-                        </span>
-                      ) : (
-                        <span className="text-zinc-500 text-xs">Standard</span>
-                      )}
-                    </td>
-                    <td className="max-w-[280px] px-4 py-3 text-zinc-300">
-                      <p className="whitespace-pre-wrap break-words">
-                        {alert.message?.trim() ? alert.message : 'No message'}
-                      </p>
-                    </td>
-
-                    <td className="px-4 py-3">
-                      <span
-                        className={`inline-flex rounded-full border px-3 py-1 text-xs font-bold ${
-                          alert.status === 'RESOLVED'
-                            ? 'border-emerald-500/50 bg-emerald-500/10 text-emerald-300'
-                            : 'border-amber-500/50 bg-amber-500/10 text-amber-300'
-                        }`}
-                      >
-                        {alert.status ?? 'PENDING'}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex flex-wrap gap-2">
-                        <button
-                          type="button"
-                          onClick={() => handleStatusUpdate(alert.id, 'ACKNOWLEDGED')}
-                          disabled={!alert.id || alert.status === 'RESOLVED'}
-                          className="rounded-lg bg-blue-500 px-2.5 py-1.5 text-[11px] font-semibold tracking-wide text-white transition hover:bg-blue-600 disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                          ACK
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleStatusUpdate(alert.id, 'DISPATCHED')}
-                          disabled={!alert.id || alert.status === 'RESOLVED'}
-                          className="rounded-lg bg-amber-500 px-2.5 py-1.5 text-[11px] font-semibold tracking-wide text-white transition hover:bg-amber-600 disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                          DISPATCH
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleStatusUpdate(alert.id, 'RESOLVED')}
-                          disabled={!alert.id || alert.status === 'RESOLVED'}
-                          className="rounded-lg bg-emerald-500 px-2.5 py-1.5 text-[11px] font-semibold tracking-wide text-white transition hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                          RESOLVE
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-        <div className="mt-6 rounded-xl border border-zinc-800 bg-zinc-900/40 p-4">
-          <h3 className="mb-3 text-sm font-semibold text-zinc-300">Audit & History</h3>
-          <div className="max-h-44 space-y-3 overflow-y-auto pr-1">
-            {history.slice(0, 20).map((item) => (
-              <div key={`history-${item.id}`} className="rounded-lg border border-zinc-800 p-3 text-xs text-zinc-300">
-                <p>
-                  <span className="font-semibold text-zinc-200">Alert:</span> {item.id}
-                </p>
-                <p>
-                  <span className="font-semibold text-zinc-200">User:</span> {item.userId}
-                </p>
-                <p>
-                  <span className="font-semibold text-zinc-200">Trail:</span>{' '}
-                  {(item.history || []).map((h) => h.status).join(' -> ') || 'PENDING'}
-                </p>
+          <div className="space-y-4 overflow-y-auto max-h-[850px] pr-2 custom-scrollbar">
+            {activeThreats.length === 0 ? (
+              <div className="py-20 text-center tactical-glass rounded-3xl">
+                <p className="text-zinc-600 font-bold uppercase tracking-widest text-sm">Monitoring Cloud Signals...</p>
               </div>
-            ))}
+            ) : (
+              activeThreats.map((alert) => (
+                <div 
+                  key={alert.id} 
+                  className={`tactical-glass p-6 rounded-3xl border-l-8 transition-all hover:translate-x-2 ${
+                    alert.priority === 'FIRE' || alert.priority === 'INTRUDER' ? 'border-l-rose-500' : 'border-l-amber-500'
+                  }`}
+                >
+                  <div className="flex flex-col md:flex-row justify-between gap-4">
+                    <div className="flex-1">
+                       <div className="flex items-center gap-3 mb-2">
+                          <span className={`px-2 py-0.5 text-[10px] font-black rounded uppercase ${
+                            alert.priority === 'FIRE' || alert.priority === 'INTRUDER' ? 'bg-rose-500 text-white' : 'bg-amber-500 text-black'
+                          }`}>
+                            {alert.priority}
+                          </span>
+                       </div>
+                       <h4 className="text-lg font-bold mb-2 text-zinc-100">{alert.message}</h4>
+                       <div className="flex flex-wrap gap-4 text-[10px] font-bold text-zinc-500 uppercase tracking-widest">
+                          <p>Location: <span className="text-white">{alert.hotelId || 'GLOBAL'} / ROOM {alert.roomNumber || 'N/A'}</span></p>
+                          <p>Source: <span className="text-white">{alert.userId}</span></p>
+                       </div>
+                    </div>
+                    <div className="flex flex-row md:flex-col gap-2 justify-end">
+                       <button 
+                         onClick={() => handleStatusUpdate(alert.id, 'ACKNOWLEDGED')}
+                         className="px-4 py-2 bg-sky-500/10 border border-sky-500/30 text-sky-300 text-[10px] font-black rounded-lg hover:bg-sky-500 hover:text-white transition-all uppercase tracking-widest"
+                       >
+                         ACK
+                       </button>
+                       <button 
+                         onClick={() => handleStatusUpdate(alert.id, 'RESOLVED')}
+                         className="px-4 py-2 bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-[10px] font-black rounded-lg hover:bg-emerald-500 hover:text-white transition-all uppercase tracking-widest"
+                       >
+                         RESOLVE
+                       </button>
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
           </div>
         </div>
       </div>

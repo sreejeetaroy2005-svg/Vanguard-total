@@ -173,6 +173,14 @@ public class CrisisTriage {
     }
 
     /**
+     * Returns the highest priority active alert.
+     */
+    public synchronized EmergencyPacket getCurrentActiveAlert() {
+        List<EmergencyPacket> alerts = getActiveAlerts();
+        return alerts.isEmpty() ? null : alerts.get(0);
+    }
+
+    /**
      * Returns all currently active, unexpired alerts for the GDC Dashboard.
      */
     public synchronized List<EmergencyPacket> getActiveAlerts() {

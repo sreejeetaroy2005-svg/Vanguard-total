@@ -4,6 +4,7 @@ import android.os.Vibrator;
 import android.util.Log;
 import android.content.Context;
 import java.util.Collections;
+import java.util.List;
 
 /**
  * AccessibilityLayer orchestrates Vanguard's accessible navigation and translation suites.
@@ -18,20 +19,24 @@ public class AccessibilityLayer {
     private final GeminiVoiceAssistant voiceAssistant;
     private final ArNavigator arNavigator;
     private final ImmersiveMapManager mapManager;
+    private final EvacuationPathfinder pathfinder;
     
-    // User configuration flag representing phone's system locale and handicap setups
+    // User configuration
     private final String userLocale;
+    private final String currentRoomId; // Tracking guest's starting location
     private final boolean isElderlyOrVisuallyImpaired;
     private final boolean isResponder;
 
-    public AccessibilityLayer(Context context, Vibrator vibrator, String locale, boolean isVisuallyImpaired, boolean responderMode) {
+    public AccessibilityLayer(Context context, Vibrator vibrator, String locale, String roomId, boolean isVisuallyImpaired, boolean responderMode) {
         this.haptics = new HapticFeedbackManager(vibrator);
         this.translator = new GlobalTranslationService(locale);
         this.voiceAssistant = new GeminiVoiceAssistant(context);
         this.arNavigator = new ArNavigator(context);
         this.mapManager = new ImmersiveMapManager(context);
+        this.pathfinder = new EvacuationPathfinder();
         
         this.userLocale = locale;
+        this.currentRoomId = roomId;
         this.isElderlyOrVisuallyImpaired = isVisuallyImpaired;
         this.isResponder = responderMode;
     }
@@ -63,21 +68,38 @@ public class AccessibilityLayer {
             translator.translateAndSpeak(rawInstruction, voiceAssistant);
         }
 
-        // 4. Mission - Immersive Guide (AR vs Map)
+        // 4. Mission - Immersive Guide (Hazard-Aware Pathfinder)
         if (isResponder) {
             // Responders see 3D full floor heatmap
             mapManager.renderLiveHeatmap(Collections.singletonList(crisisAlert));
         } else {
-            // Guests see AR arrows guiding them to the nearest exit
-            float headingToExit = calculateExitVector();
-            arNavigator.projectGreenArrows(headingToExit);
+            // Calculate safest shortest path avoiding active hazards
+            List<EvacuationPathfinder.Node> safePath = pathfinder.findSafePath(currentRoomId);
+            
+            if (!safePath.isEmpty() && safePath.size() > 1) {
+                // Point AR arrows towards the NEXT safe node in the sequence
+                float heading = calculateHeading(safePath.get(0), safePath.get(1));
+                arNavigator.projectGreenArrows(heading);
+                
+                // TACTILE GUIDANCE: Signal correctly identified safe path
+                if (isElderlyOrVisuallyImpaired) {
+                    haptics.triggerOnCourseHaptics();
+                }
+                
+                Log.i(TAG, "[GUIDE] Routing Guest via " + safePath.get(1).label);
+            } else {
+                voiceAssistant.speakInstruction("No safe path found. Stay in place and wait for responders.");
+            }
         }
 
         Log.i(TAG, "--- ACCESSIBILITY LAYER FULLY DEPLOYED ---\n");
     }
 
-    private float calculateExitVector() {
-        return 90.0f; // Mock vector calculation
+    /**
+     * Calculates the navigational bearing (theta) between two interior hotel nodes.
+     */
+    private float calculateHeading(EvacuationPathfinder.Node from, EvacuationPathfinder.Node to) {
+        return (float) Math.toDegrees(Math.atan2(to.y - from.y, to.x - from.x));
     }
     
     public void shutdown() {

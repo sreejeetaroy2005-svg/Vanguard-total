@@ -21,6 +21,13 @@
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-web</artifactId>
     </dependency>
+
+    <!-- Google AI Studio SDK — Gemini 2.5 Flash (FREE, API key auth) -->
+    <dependency>
+      <groupId>com.google.genai</groupId>
+      <artifactId>google-genai</artifactId>
+      <version>1.50.0</version>
+    </dependency>
   </dependencies>
   <build>
     <plugins>

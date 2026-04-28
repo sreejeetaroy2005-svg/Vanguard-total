@@ -1,5 +1,7 @@
 package vanguard;
 
+import java.util.List;
+
 public class TriageDemo {
     public static void main(String[] args) throws InterruptedException {
         CrisisTriage triage = new CrisisTriage();

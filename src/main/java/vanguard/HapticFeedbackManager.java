@@ -14,11 +14,16 @@ public class HapticFeedbackManager {
     private final Vibrator vibrator;
 
     // EVACUATE: 3 Long Pulses
-    // Format: [Delay, Vibrate, Delay, Vibrate...]
     private static final long[] PATTERN_EVACUATE = {0, 1000, 500, 1000, 500, 1000};
     
     // SHELTER: Rapid Short Pulses
     private static final long[] PATTERN_SHELTER = {0, 150, 100, 150, 100, 150, 100, 150, 100, 150};
+
+    // ON_COURSE: Slow Rhythmic Heartbeat (Reassurance for Visually Impaired)
+    private static final long[] PATTERN_ON_COURSE = {0, 100, 1000, 100, 1000};
+
+    // HAZARD_ALERT: Harsh Jagged Vibration (Danger Proximity)
+    private static final long[] PATTERN_HAZARD = {0, 500, 50, 500, 50, 500, 50};
 
     public HapticFeedbackManager(Vibrator vibrator) {
         this.vibrator = vibrator;
@@ -53,6 +58,35 @@ public class HapticFeedbackManager {
             } else {
                 vibrator.vibrate(PATTERN_SHELTER, -1);
             }
+        }
+    }
+
+    /**
+     * Rhythmic reassurance pulse used for eyes-free navigation.
+     */
+    public void triggerOnCourseHaptics() {
+        if (vibrator != null && vibrator.hasVibrator()) {
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                vibration(PATTERN_ON_COURSE);
+            }
+        }
+    }
+
+    /**
+     * Urgent jagged vibration triggered when approaching a danger zone.
+     */
+    public void triggerHazardHaptics() {
+        if (vibrator != null && vibrator.hasVibrator()) {
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                vibration(PATTERN_HAZARD);
+            }
+        }
+    }
+
+    private void vibration(long[] pattern) {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+            VibrationEffect effect = VibrationEffect.createWaveform(pattern, -1);
+            vibrator.vibrate(effect);
         }
     }
 
