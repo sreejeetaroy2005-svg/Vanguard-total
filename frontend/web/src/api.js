@@ -2,7 +2,7 @@ import axios from 'axios';
 
 // This is the connection to your backend server
 // We use window.location.hostname to support LAN/Mesh environments where the IP might change
-const baseURL = process.env.REACT_APP_API_URL || (typeof window !== 'undefined' ? `http://${window.location.hostname || 'localhost'}:8080/api` : 'http://localhost:8080/api');
+const baseURL = import.meta.env.VITE_API_URL || (typeof window !== 'undefined' ? `http://${window.location.hostname || 'localhost'}:8080/api` : 'http://localhost:8080/api');
 const API = axios.create({ baseURL });
 
 // This adds your token to every request so the server knows who you are

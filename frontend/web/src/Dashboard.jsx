@@ -309,12 +309,12 @@ const Dashboard = () => {
                 <span className="h-2 w-2 bg-rose-500 rounded-full animate-ping"></span>
                 <span className="text-[10px] font-black tracking-widest text-white drop-shadow-md">LOCAL SENSOR HUB</span>
              </div>
-             <img 
-               src={`${process.env.REACT_APP_ML_URL || 'http://localhost:5000'}/video_feed`} 
-               alt="AI Stream" 
-               className="w-full aspect-video object-cover grayscale brightness-50 hover:grayscale-0 transition-all duration-700"
-               onError={(e) => e.target.src = "https://images.unsplash.com/photo-1451187580459-43490279c0fa?q=80&w=1000&auto=format&fit=crop"}
-             />
+              <img 
+                src={`${import.meta.env.VITE_ML_URL || 'http://localhost:5000'}/video_feed`} 
+                alt="AI Stream" 
+                className="w-full aspect-video object-cover grayscale brightness-50 hover:grayscale-0 transition-all duration-700"
+                onError={(e) => e.target.src = "https://images.unsplash.com/photo-1451187580459-43490279c0fa?q=80&w=1000&auto=format&fit=crop"}
+              />
           </div>
 
           <div className="tactical-glass rounded-3xl p-6 relative border border-white/5">
