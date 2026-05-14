@@ -5,6 +5,8 @@ import time
 from flask import Flask, Response
 from ultralytics import YOLO
 
+import os
+
 app = Flask(__name__)
 
 # 1. INITIALIZE AI MODELS
@@ -15,17 +17,24 @@ THREAT_LABELS = ['knife', 'scissors', 'baseball bat', 'cell phone']
 CROWD_LIMIT = 5         
 RUSH_THRESHOLD = 40000   
 FIGHT_INTENSITY = 55     
-HOTEL_ID = "GLOBAL" # Set this to your specific hotel ID (e.g. 'taj01') to see alerts on your dashboard
+HOTEL_ID = "GLOBAL" 
+# USE ENVIRONMENT VARIABLE FOR CLOUD BACKEND
+BACKEND_URL = os.getenv("VANGUARD_BACKEND_URL", "http://localhost:8080/api/alerts")
 
 # 3. GLOBAL STATE
 last_alert_time = 0
-ALERT_COOLDOWN = 10 # Seconds cooldown so backend doesn't get DDoSed
+ALERT_COOLDOWN = 10 
+
+@app.after_request
+def add_header(response):
+    # CRITICAL: This bypasses the ngrok "browser warning" page that breaks the Dashboard video feed
+    response.headers['ngrok-skip-browser-warning'] = 'true'
+    return response
 
 def send_vanguard_alert(message, context_type, priority):
     global last_alert_time
     now = time.time()
     
-    # Anti-Spam Lock
     if now - last_alert_time < ALERT_COOLDOWN:
         return 
     
@@ -39,19 +48,15 @@ def send_vanguard_alert(message, context_type, priority):
         "priority": priority,
         "userId": "CCTV-NODE-01",
         "hotelId": HOTEL_ID,
-        "latitude": 12.9716,
-        "longitude": 77.5946,
         "message": f"{message}",
-        "payload": f"{message}",
         "contextType": context_type
     }
     
     print(f"📡 SENDING VANGUARD ALERT: {message}")
     try:
-        # Vanguard Backend POST
-        requests.post("http://localhost:8080/api/alerts", json=payload, timeout=2)
+        requests.post(BACKEND_URL, json=payload, timeout=2)
     except Exception as e:
-        print("⚠️ Failed to reach GDC Edge Server:", e)
+        print("⚠️ Failed to reach GDC Server:", e)
 
 def gen_frames():
     cap = cv2.VideoCapture(0)

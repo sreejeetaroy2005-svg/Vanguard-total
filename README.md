@@ -48,20 +48,20 @@ Copy `.env.example` to `.env` and add your **FREE Google AI API Key** from [aist
 
 #### 2. Start the GDC Server (Java)
 ```bash
-cd gdc-server
+cd backend/server
 ./mvnw spring-boot:run
 ```
 
 #### 3. Start the Dashboard (React)
 ```bash
-cd gdc-client
+cd frontend/web
 npm install
 npm start
 ```
 
 #### 4. Start the ML CCTV Node (Python)
 ```bash
-cd ml_component
+cd backend/ml
 pip install -r requirements.txt
 python src/motion_detection.py
 ```
