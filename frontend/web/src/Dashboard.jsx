@@ -11,7 +11,7 @@ import {
   addDoc
 } from 'firebase/firestore'
 import { pathfinder } from './utils/pathfinder'
-import { acknowledgeAlert, resolveAlert, sendSignal } from './api'
+import { acknowledgeAlert, resolveAlert, sendSignal, baseURL } from './api'
 
 const Dashboard = () => {
   const [alerts, setAlerts] = useState([])
@@ -50,7 +50,7 @@ const Dashboard = () => {
 
   // 1. SSE Real-Time Tactical Stream
   useEffect(() => {
-    const eventSource = new EventSource(`http://${window.location.hostname}:8080/api/alerts/stream`);
+    const eventSource = new EventSource(`${baseURL}/alerts/stream`);
     
     eventSource.addEventListener('NEW_ALERT', (e) => {
       console.log("Tactical SOS Received via SSE:", e.data);
