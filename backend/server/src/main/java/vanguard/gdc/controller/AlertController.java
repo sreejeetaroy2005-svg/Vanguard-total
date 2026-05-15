@@ -19,7 +19,7 @@ import org.json.JSONArray;
 
 @RestController
 @RequestMapping("/api/alerts")
-@CrossOrigin(origins = "*", allowedHeaders = "*", methods = {RequestMethod.GET, RequestMethod.POST, RequestMethod.OPTIONS})
+@CrossOrigin(origins = "*", allowedHeaders = "*", methods = {RequestMethod.GET, RequestMethod.POST, RequestMethod.PUT, RequestMethod.DELETE, RequestMethod.OPTIONS}, exposedHeaders = "*")
 public class AlertController {
     
     private final EvacuationPathfinder pathfinder = new EvacuationPathfinder();
