@@ -35,16 +35,6 @@ public class AlertController {
     public AlertController() {
     }
 
-    @GetMapping("/")
-    public ResponseEntity<Map<String, String>> healthCheck() {
-        Map<String, String> status = new HashMap<>();
-        status.put("system", "VANGUARD_CENTRAL_GDC");
-        status.put("status", "OPERATIONAL");
-        status.put("version", "0.0.1-SNAPSHOT");
-        status.put("region", "OREGON_US_WEST");
-        return ResponseEntity.ok(status);
-    }
-
     @PostMapping
     public ResponseEntity<EmergencyPacketDto> receiveAlert(@RequestBody EmergencyPacketDto packet) {
         if (packet == null || packet.getUniqueId() == null) return ResponseEntity.badRequest().build();
