@@ -1,46 +1,116 @@
 @import "tailwindcss";
 
 @theme {
-  --color-brand-red: #f43f5e;
+  --color-brand-red: #ef4444;
   --color-brand-amber: #f59e0b;
   --color-brand-emerald: #10b981;
   --color-brand-sky: #0ea5e9;
   
-  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-sans: 'Plus Jakarta Sans', 'Inter', system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+  --font-display: 'Space Grotesk', 'Plus Jakarta Sans', sans-serif;
 }
 
-/* TACTICAL UI DESIGN SYSTEM */
+/* CYBERSECURITY/TACTICAL UI DESIGN SYSTEM */
 
 :root {
   color-scheme: dark;
-  --bg-primary: #050505;
-  --glass-bg: rgba(15, 15, 20, 0.7);
-  --glass-border: rgba(255, 255, 255, 0.08);
+  --bg-primary: #030303;
+  --glass-bg: rgba(9, 9, 11, 0.45);
+  --glass-border: rgba(255, 255, 255, 0.05);
 }
 
 body {
   background-color: var(--bg-primary);
   background-image: 
-    radial-gradient(circle at 50% 0%, rgba(244, 63, 94, 0.05) 0%, transparent 50%),
-    radial-gradient(circle at 0% 100%, rgba(14, 165, 233, 0.05) 0%, transparent 50%);
-  color: #fff;
+    radial-gradient(circle at 50% -20%, rgba(139, 92, 246, 0.08) 0%, transparent 60%),
+    radial-gradient(circle at 0% 100%, rgba(239, 68, 68, 0.04) 0%, transparent 50%),
+    radial-gradient(circle at 100% 100%, rgba(16, 185, 129, 0.04) 0%, transparent 50%);
+  color: #f4f4f5;
   overflow-x: hidden;
   font-family: var(--font-sans);
+  min-height: 100vh;
+}
+
+/* Premium Web Constellation/Grid Background */
+.cyber-grid {
+  position: absolute;
+  inset: 0;
+  background-image: 
+    linear-gradient(rgba(255, 255, 255, 0.007) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.007) 1px, transparent 1px);
+  background-size: 50px 50px;
+  background-position: center;
+  mask-image: radial-gradient(circle at center, black 40%, transparent 80%);
+  pointer-events: none;
+  z-index: 1;
 }
 
 /* Glassmorphism Panels */
 .tactical-glass {
   background: var(--glass-bg);
-  backdrop-filter: blur(16px);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
   border: 1px solid var(--glass-border);
-  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.8);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .tactical-glass:hover {
-  border-color: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.09);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6);
 }
 
-/* Emergency Scanline Effect */
+/* Glowing Neon Elements */
+.glow-purple {
+  box-shadow: 0 0 30px -5px rgba(139, 92, 246, 0.2);
+}
+.glow-rose {
+  box-shadow: 0 0 35px -5px rgba(239, 68, 68, 0.25);
+}
+.glow-emerald {
+  box-shadow: 0 0 30px -5px rgba(16, 185, 129, 0.2);
+}
+.glow-sky {
+  box-shadow: 0 0 30px -5px rgba(14, 165, 233, 0.2);
+}
+
+/* Gradient Text styles */
+.gradient-text-purple {
+  background: linear-gradient(135deg, #a78bfa 0%, #ec4899 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.gradient-text-rose {
+  background: linear-gradient(135deg, #f43f5e 0%, #f97316 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.gradient-text-cyan {
+  background: linear-gradient(135deg, #38bdf8 0%, #8b5cf6 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.3);
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+/* Scanline Overlay & Shaders */
 .scanline-container {
   overflow: hidden;
   position: relative;
@@ -56,91 +126,70 @@ body {
   right: 0;
   background: linear-gradient(
     rgba(18, 16, 16, 0) 50%, 
-    rgba(0, 0, 0, 0.25) 50%
-  ), linear-gradient(
-    90deg, 
-    rgba(255, 0, 0, 0.06), 
-    rgba(0, 255, 0, 0.02), 
-    rgba(0, 0, 255, 0.06)
+    rgba(0, 0, 0, 0.15) 50%
   );
   z-index: 2;
-  background-size: 100% 2px, 3px 100%;
+  background-size: 100% 4px;
   pointer-events: none;
 }
 
-/* Emergency Pulsing Hazard */
-@keyframes pulse-red {
-  0% { box-shadow: 0 0 0 0 rgba(244, 63, 94, 0.4); }
-  70% { box-shadow: 0 0 0 10px rgba(244, 63, 94, 0); }
-  100% { box-shadow: 0 0 0 0 rgba(244, 63, 94, 0); }
-}
-
-.hazard-pulse {
-  animation: pulse-red 2s infinite;
-}
-
-/* New Tactical Animations */
+/* Animations */
 @keyframes pulse-red-bg {
-  0% { background-color: rgba(244, 63, 94, 0); }
-  50% { background-color: rgba(244, 63, 94, 0.15); }
-  100% { background-color: rgba(244, 63, 94, 0); }
+  0% { background-color: rgba(239, 68, 68, 0); }
+  50% { background-color: rgba(239, 68, 68, 0.04); }
+  100% { background-color: rgba(239, 68, 68, 0); }
 }
 
 .animate-pulse-red {
-  animation: pulse-red-bg 1.5s infinite;
+  animation: pulse-red-bg 2s infinite ease-in-out;
 }
 
 @keyframes voice-bar {
-  0% { height: 20%; }
+  0% { height: 25%; }
   50% { height: 100%; }
-  100% { height: 20%; }
+  100% { height: 25%; }
 }
 
 .animate-voice-bar {
-  animation: voice-bar 0.8s infinite ease-in-out;
+  animation: voice-bar 0.7s infinite ease-in-out;
 }
 
 @keyframes fadeIn {
-  from { opacity: 0; transform: scale(0.95); }
+  from { opacity: 0; transform: scale(0.97); }
   to { opacity: 1; transform: scale(1); }
 }
 
 .animate-fadeIn {
-  animation: fadeIn 0.4s ease-out;
-}
-
-/* Custom Scrollbar */
-::-webkit-scrollbar {
-  width: 6px;
-}
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-::-webkit-scrollbar-thumb {
-  background: #222;
-  border-radius: 10px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: #333;
+  animation: fadeIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
 /* HUD Typography */
 .hud-title {
   text-transform: uppercase;
-  letter-spacing: 0.15em;
-  font-weight: 900;
-  font-family: 'Space Grotesk', sans-serif; /* Fallback to sans if not available */
+  letter-spacing: 0.12em;
+  font-weight: 800;
+  font-family: var(--font-display);
 }
 
 .hud-font {
-  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
 }
 
-.custom-scrollbar::-webkit-scrollbar {
-  width: 4px;
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0px) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-8px) rotate(1deg);
+  }
 }
-.custom-scrollbar::-webkit-scrollbar-thumb {
-  background: #444;
-  border-radius: 4px;
+
+.animate-float-slow {
+  animation: float 7s ease-in-out infinite;
+}
+
+.animate-float-delayed {
+  animation: float 9s ease-in-out infinite;
+  animation-delay: 2.5s;
 }

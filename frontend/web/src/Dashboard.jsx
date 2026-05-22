@@ -11,9 +11,10 @@ import {
   addDoc
 } from 'firebase/firestore'
 import { pathfinder } from './utils/pathfinder'
-import { acknowledgeAlert, resolveAlert, sendSignal, baseURL } from './api'
+import { acknowledgeAlert, resolveAlert, sendSignal, baseURL, sendAlert } from './api'
 
 const Dashboard = () => {
+  const navigate = useNavigate();
   const [alerts, setAlerts] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -25,6 +26,7 @@ const Dashboard = () => {
   const [incomingSOS, setIncomingSOS] = useState(null);
   const [showSOSPopup, setShowSOSPopup] = useState(false);
   const [isVoiceActive, setIsVoiceActive] = useState(false);
+  const [isAlarmPlaying, setIsAlarmPlaying] = useState(false);
   
   // WebRTC Refs
   const pcRef = useRef(null);
@@ -55,10 +57,10 @@ const Dashboard = () => {
     eventSource.addEventListener('NEW_ALERT', (e) => {
       console.log("Tactical SOS Received via SSE:", e.data);
       const alert = JSON.parse(e.data);
-      // Demo Override: Show popup for ANY new emergency packet
       setIncomingSOS(alert);
       setShowSOSPopup(true);
       triggerAlertSound(alert.priority);
+      speakAlert(alert);
     });
 
     eventSource.addEventListener('WEBRTC_SIGNAL', async (e) => {
@@ -76,23 +78,79 @@ const Dashboard = () => {
     return () => eventSource.close();
   }, []);
 
+  // Voice announcement using browser Web Speech API
+  const speakAlert = (alert) => {
+    try {
+      if (!window.speechSynthesis) return;
+      window.speechSynthesis.cancel();
+
+      const room = alert.roomNumber || 'unknown';
+      const msg = alert.message || 'Emergency detected';
+      const text = `VANGUARD ALERT. ${alert.priority === 'CRITICAL' ? 'Critical threat detected.' : 'Warning.'} Room ${room}. ${msg}. All personnel respond immediately.`;
+
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.rate = 0.88;
+      utterance.pitch = 0.75;
+      utterance.volume = 1;
+
+      const assignVoiceAndSpeak = () => {
+        const voices = window.speechSynthesis.getVoices();
+        const preferred = voices.find(v => v.lang.startsWith('en') && v.name.toLowerCase().includes('male'))
+          || voices.find(v => v.lang.startsWith('en'));
+        if (preferred) utterance.voice = preferred;
+        window.speechSynthesis.speak(utterance);
+      };
+
+      // Voices already loaded (Firefox) — speak immediately
+      if (window.speechSynthesis.getVoices().length > 0) {
+        assignVoiceAndSpeak();
+      } else {
+        // Chrome/Edge: wait for voices to be ready
+        window.speechSynthesis.addEventListener('voiceschanged', assignVoiceAndSpeak, { once: true });
+        // Safety fallback: speak without a specific voice after 500ms if event never fires
+        setTimeout(() => {
+          if (!utterance.voice) {
+            window.speechSynthesis.speak(utterance);
+          }
+        }, 500);
+      }
+    } catch (e) {
+      console.warn('speakAlert failed safely:', e);
+    }
+  };
+
   const triggerAlertSound = (priority) => {
     try {
       if (priority === 'CRITICAL' && criticalSirenRef.current) {
         criticalSirenRef.current.loop = true;
-        criticalSirenRef.current.play().catch(() => console.log("Autoplay blocked/Sound failed"));
+        criticalSirenRef.current.play()
+          .then(() => setIsAlarmPlaying(true))
+          .catch(() => console.log('Autoplay blocked/Sound failed'));
       } else if (sirenRef.current) {
-        sirenRef.current.play().catch(() => console.log("Autoplay blocked/Sound failed"));
+        sirenRef.current.play()
+          .then(() => setIsAlarmPlaying(true))
+          .catch(() => console.log('Autoplay blocked/Sound failed'));
       }
     } catch (e) {
-      console.warn("Audio trigger failed safely");
+      console.warn('Audio trigger failed safely:', e);
     }
   }
 
   const stopAlertSounds = () => {
-    criticalSirenRef.current.pause();
-    criticalSirenRef.current.currentTime = 0;
-    sirenRef.current.pause();
+    try {
+      if (criticalSirenRef.current) {
+        criticalSirenRef.current.pause();
+        criticalSirenRef.current.currentTime = 0;
+      }
+      if (sirenRef.current) {
+        sirenRef.current.pause();
+        sirenRef.current.currentTime = 0;
+      }
+    } catch (e) {
+      console.warn('stopAlertSounds failed safely:', e);
+    }
+    setIsAlarmPlaying(false);
+    try { window.speechSynthesis?.cancel(); } catch(e) {}
   }
 
   // 2. WebRTC Logic (Admin)
@@ -170,6 +228,34 @@ const Dashboard = () => {
     }
   }
 
+  // Simulate a CCTV threat alert (for demo / testing)
+  const simulateCCTVThreat = async () => {
+    const threats = [
+      { msg: 'AI THREAT: Weapon Detected (knife)', type: 'THREAT' },
+      { msg: 'AI THREAT: Physical Altercation Detected', type: 'THREAT' },
+      { msg: 'AI THREAT: Suspicious Crowd Surge Detected', type: 'THREAT' },
+      { msg: 'AI THREAT: Unauthorized Person in Restricted Area', type: 'THREAT' },
+    ];
+    const pick = threats[Math.floor(Math.random() * threats.length)];
+    try {
+      await sendAlert({
+        uniqueId: `SIM-CCTV-${Date.now()}`,
+        timestamp: Date.now(),
+        timeToLive: 120000,
+        status: 'PENDING',
+        priority: 'CRITICAL',
+        userId: 'CCTV-NODE-01',
+        hotelId: hotelId,
+        message: pick.msg,
+        contextType: pick.type,
+        roomNumber: 'R301',
+        floor: '3rd Floor',
+      });
+    } catch (e) {
+      console.error('Simulate CCTV alert failed:', e);
+    }
+  };
+
   const handleBroadcast = async () => {
     if (!broadcastText.trim()) return;
     try {
@@ -187,11 +273,14 @@ const Dashboard = () => {
   }
 
   const handleAcknowledge = async (alert) => {
-    await acknowledgeAlert(alert.uniqueId || alert.id);
+    try { await acknowledgeAlert(alert.uniqueId || alert.id); } catch(e) {}
     stopAlertSounds();
+    setShowSOSPopup(false);
     if (alert.id) {
-       const alertRef = doc(db, 'alerts', alert.id);
-       await updateDoc(alertRef, { status: 'ACKNOWLEDGED' });
+      try {
+        const alertRef = doc(db, 'alerts', alert.id);
+        await updateDoc(alertRef, { status: 'ACKNOWLEDGED' });
+      } catch(e) {}
     }
     setIncomingSOS(prev => prev ? { ...prev, status: 'ACKNOWLEDGED' } : null);
   }
@@ -209,228 +298,332 @@ const Dashboard = () => {
   const activeThreats = alerts.filter(a => a.status !== 'RESOLVED' && a.priority !== 'NONE')
 
   return (
-    <div className={`min-h-screen bg-black text-white p-4 lg:p-8 hud-font selection:bg-rose-500/30 ${showSOSPopup ? 'animate-pulse-red' : ''}`}>
+    <div className={`min-h-screen bg-[#030303] text-zinc-100 flex flex-col overflow-hidden relative pb-16 ${showSOSPopup ? 'animate-pulse-red' : ''}`}>
+      {/* Background Decorators */}
+      <div className="cyber-grid absolute inset-0"></div>
+      <div className="absolute top-[10%] left-[30%] w-[500px] h-[500px] bg-rose-500/5 blur-[120px] pointer-events-none"></div>
+      <div className="absolute bottom-[10%] right-[10%] w-[400px] h-[400px] bg-emerald-500/5 blur-[100px] pointer-events-none"></div>
+
       <audio ref={audioRef} autoPlay />
+
+      {/* Header Sticky Bar */}
+      <header className="sticky top-0 z-40 w-full border-b border-white/5 bg-[#030303]/60 backdrop-blur-md px-6 md:px-12 py-4 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <span className="text-2xl shadow-[0_0_15px_rgba(239,68,68,0.3)]">🛡️</span>
+          <div>
+            <h1 className="font-display text-lg font-black tracking-widest text-white leading-none">VANGUARD GDC</h1>
+            <p className="text-[9px] font-bold text-rose-500 uppercase tracking-widest mt-1">Tactical Coordination Hub</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-3">
+          <span className="hidden sm:inline rounded-full bg-zinc-900 border border-white/5 px-3 py-1.5 font-mono text-[9px] font-extrabold tracking-widest text-zinc-400">
+            SECURE LINK // {hotelId.toUpperCase()}
+          </span>
+          {/* DEMO: Simulate CCTV Threat Button */}
+          <button
+            onClick={simulateCCTVThreat}
+            className="flex items-center gap-2 rounded-xl border border-rose-500/40 bg-rose-500/10 px-4 py-2 font-display text-[9px] font-bold tracking-widest uppercase text-rose-400 hover:bg-rose-600 hover:text-white hover:border-rose-600 transition-all shadow-[0_0_12px_rgba(239,68,68,0.15)] cursor-pointer"
+          >
+            <span className="h-1.5 w-1.5 rounded-full bg-rose-500 animate-ping"></span>
+            SIM CCTV THREAT
+          </button>
+          <button 
+            onClick={() => {
+              localStorage.clear();
+              navigate('/');
+            }}
+            className="rounded-xl bg-white/5 border border-white/10 px-4 py-2 font-display text-[9px] font-bold tracking-widest uppercase text-zinc-400 hover:text-white hover:bg-rose-600/10 hover:border-rose-500/30 transition-all cursor-pointer"
+          >
+            DISCONNECT
+          </button>
+        </div>
+      </header>
       
       {/* 🚨 EMERGENCY SOS POPUP MODAL */}
       {showSOSPopup && incomingSOS && (
-        <div className="fixed inset-0 z-[1000] flex items-center justify-center p-6 bg-black/80 backdrop-blur-md animate-fadeIn">
-          <div className="w-full max-w-2xl bg-zinc-950 border-4 border-rose-600 rounded-[3rem] p-8 shadow-[0_0_100px_rgba(225,29,72,0.4)] overflow-hidden relative">
-            <div className="absolute top-0 left-0 w-full h-2 bg-rose-600 animate-pulse"></div>
-            <div className="scanline-container absolute inset-0 opacity-10 pointer-events-none"></div>
+        <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fadeIn">
+          <div className="w-full max-w-2xl bg-zinc-950/95 border-2 border-rose-600/60 rounded-3xl p-8 shadow-[0_0_80px_rgba(239,68,68,0.3)] overflow-hidden relative">
+            {/* Ambient Red glow inside card */}
+            <div className="absolute top-0 left-0 w-full h-[4px] bg-gradient-to-r from-rose-500 to-amber-500 animate-pulse"></div>
+            <div className="scanline-container absolute inset-0 opacity-[0.03] pointer-events-none"></div>
             
-            <div className="flex justify-between items-start mb-8">
+            <div className="flex justify-between items-start mb-8 relative z-10">
               <div>
-                <h1 className="text-4xl font-black text-rose-500 tracking-tighter mb-2 animate-bounce">CRITICAL SOS</h1>
-                <p className="text-[10px] font-black tracking-[0.5em] text-zinc-500 uppercase">Incoming Tactical Uplink</p>
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-rose-500/30 bg-rose-500/10 px-3 py-1 text-[8px] font-black tracking-widest text-rose-400 uppercase mb-2 animate-bounce">
+                  🚨 Priority Triage Needed
+                </span>
+                <h1 className="font-display text-3xl font-black text-white tracking-tight leading-none">CRITICAL EMERGENCY</h1>
               </div>
               <div className="text-right">
-                <span className="text-2xl font-black text-white/50">{new Date(incomingSOS.timestamp).toLocaleTimeString()}</span>
+                <span className="font-mono text-xs font-bold text-zinc-500 uppercase tracking-widest">
+                  {new Date(incomingSOS.timestamp).toLocaleTimeString()}
+                </span>
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-6 mb-8">
-              <div className="tactical-glass p-6 rounded-3xl border border-white/5">
-                <p className="text-[9px] font-black text-zinc-500 uppercase tracking-widest mb-2">Location Context</p>
-                <p className="text-2xl font-black text-white">ROOM {incomingSOS.roomNumber}</p>
-                <p className="text-sm font-bold text-rose-400 uppercase tracking-widest">{incomingSOS.floor || 'N/A'}</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6 relative z-10">
+              <div className="tactical-glass p-5 rounded-2xl border border-white/5">
+                <p className="font-mono text-[9px] font-bold text-zinc-500 uppercase tracking-widest mb-1.5">Sector / Room Location</p>
+                <p className="font-display text-2xl font-black text-white">ROOM {incomingSOS.roomNumber}</p>
+                <p className="font-mono text-[10px] font-bold text-rose-400 uppercase tracking-widest mt-0.5">{incomingSOS.floor || '3rd Floor'}</p>
               </div>
-              <div className="tactical-glass p-6 rounded-3xl border border-white/5">
-                <p className="text-[9px] font-black text-zinc-500 uppercase tracking-widest mb-2">AI Threat Severity</p>
-                <p className={`text-xl font-black uppercase ${incomingSOS.priority === 'CRITICAL' ? 'text-rose-500' : 'text-amber-500'}`}>
+              <div className="tactical-glass p-5 rounded-2xl border border-white/5">
+                <p className="font-mono text-[9px] font-bold text-zinc-500 uppercase tracking-widest mb-1.5">AI Threat Assessment</p>
+                <p className={`font-display text-2xl font-black uppercase tracking-tight ${incomingSOS.priority === 'CRITICAL' ? 'text-rose-500' : 'text-amber-500'}`}>
                   {incomingSOS.aiThreatSeverity || incomingSOS.priority}
                 </p>
+                <p className="font-mono text-[10px] font-bold text-zinc-400 uppercase tracking-widest mt-0.5">Vulnerability: {incomingSOS.vulnerabilityProfile || 'STANDARD'}</p>
               </div>
             </div>
 
-            <div className="bg-white/5 p-6 rounded-3xl mb-8 border border-white/10">
-              <p className="text-[9px] font-black text-zinc-500 uppercase tracking-widest mb-2">Guest Message</p>
-              <p className="text-xl font-medium text-white italic">"{incomingSOS.message}"</p>
+            <div className="bg-zinc-900/50 p-6 rounded-2xl mb-6 border border-white/5 relative z-10">
+              <p className="font-mono text-[9px] font-bold text-zinc-500 uppercase tracking-widest mb-2">Guest Telemetry Feed</p>
+              <p className="text-base font-medium text-white italic">"{incomingSOS.message}"</p>
             </div>
 
             {/* LIVE VOICE CONSOLE */}
-            <div className="bg-emerald-500/10 border border-emerald-500/30 p-6 rounded-3xl mb-8 flex items-center justify-between">
+            <div className="bg-emerald-500/5 border border-emerald-500/20 p-5 rounded-2xl mb-8 flex flex-col sm:flex-row items-center justify-between gap-4 relative z-10">
               <div className="flex items-center gap-4">
-                <div className="flex gap-1 items-end h-8">
-                  {[1,2,3,4,5].map(i => <div key={i} className="w-1 bg-emerald-500 animate-voice-bar" style={{ animationDelay: `${i*0.1}s` }}></div>)}
+                <div className="flex gap-1.5 items-end h-6">
+                  {[1,2,3,4,5,6].map(i => (
+                    <div 
+                      key={i} 
+                      className="w-[3px] bg-emerald-500 rounded-full animate-voice-bar" 
+                      style={{ animationDelay: `${i*0.1}s`, height: '100%' }}
+                    ></div>
+                  ))}
                 </div>
-                <p className="text-xs font-black text-emerald-400 uppercase tracking-[0.3em]">Live Audio Channel Open</p>
+                <div>
+                  <p className="text-[10px] font-black text-emerald-400 uppercase tracking-widest">Voice Uplink Ready</p>
+                  <p className="text-[9px] text-zinc-500 font-semibold tracking-wider mt-0.5">Dual-channel peer-to-peer</p>
+                </div>
               </div>
               <button 
                 onClick={toggleMic}
-                className={`px-8 py-3 rounded-full text-xs font-black uppercase tracking-widest transition-all ${
-                  isVoiceActive ? 'bg-rose-600 text-white animate-pulse' : 'bg-emerald-600 text-white shadow-[0_0_15px_#10b981]'
+                className={`w-full sm:w-auto px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all cursor-pointer ${
+                  isVoiceActive 
+                    ? 'bg-rose-600 hover:bg-rose-500 text-white animate-pulse' 
+                    : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-[0_0_15px_rgba(16,185,129,0.25)]'
                 }`}
               >
-                {isVoiceActive ? 'MUTE (LIVE)' : 'PUSH-TO-TALK'}
+                {isVoiceActive ? 'Mute Voice Line' : 'Connect Microline'}
               </button>
             </div>
 
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-              <button onClick={() => handleAcknowledge(incomingSOS)} className="py-5 bg-sky-600 text-white font-black rounded-2xl text-xs uppercase tracking-widest hover:bg-sky-500 transition-all">
+            <div className="grid grid-cols-2 gap-3 relative z-10">
+              <button onClick={() => handleAcknowledge(incomingSOS)} className="py-4 bg-sky-600 hover:bg-sky-500 text-white font-black rounded-xl text-[10px] uppercase tracking-widest transition-all cursor-pointer">
                 Acknowledge
               </button>
-              <button onClick={() => handleResolve(incomingSOS)} className="py-5 bg-emerald-600 text-white font-black rounded-2xl text-xs uppercase tracking-widest hover:bg-emerald-500 transition-all">
+              <button onClick={() => handleResolve(incomingSOS)} className="py-4 bg-emerald-600 hover:bg-emerald-500 text-white font-black rounded-xl text-[10px] uppercase tracking-widest transition-all cursor-pointer">
                 Mark Resolved
               </button>
-              <button className="py-5 bg-rose-700 text-white font-black rounded-2xl text-xs uppercase tracking-widest hover:bg-rose-600 transition-all col-span-2 md:col-span-1 shadow-[0_0_20px_rgba(225,29,72,0.3)]">
-                Dispatch 112
-              </button>
+              {isAlarmPlaying && (
+                <button onClick={stopAlertSounds} className="col-span-2 py-4 bg-zinc-900 border border-amber-500/20 text-amber-400 hover:bg-amber-600 hover:text-white hover:border-amber-600 font-black rounded-xl text-[10px] uppercase tracking-widest transition-all cursor-pointer">
+                  🔇 Silence Alarm
+                </button>
+              )}
             </div>
           </div>
         </div>
       )}
 
-      {/* TOP HUD BAR */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-        <div className="tactical-glass p-5 rounded-2xl flex flex-col justify-center border-l-4 border-l-rose-500 scanline-container shadow-[0_0_20px_rgba(244,63,94,0.1)]">
-          <p className="text-[10px] font-black tracking-[0.2em] text-rose-500 mb-1 uppercase">Active Threats</p>
-          <p className="text-4xl font-black">{activeThreats.length}</p>
+      {/* Main Body */}
+      <main className="max-w-7xl mx-auto w-full px-6 md:px-12 mt-8 flex-1 flex flex-col gap-8 relative z-10">
+        
+        {/* TOP HUD BAR */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="tactical-glass p-5 rounded-2xl flex flex-col justify-center border-l-4 border-rose-500 relative overflow-hidden group">
+            <div className="absolute top-[-10%] right-[-10%] w-[80px] h-[80px] rounded-full bg-rose-500/5 group-hover:bg-rose-500/10 transition-all blur-md"></div>
+            <p className="font-mono text-[9px] font-black tracking-widest text-zinc-500 mb-1.5 uppercase">Active Threat Packets</p>
+            <p className="font-display text-4xl font-black text-white leading-none">{activeThreats.length}</p>
+          </div>
+          <div className="tactical-glass p-5 rounded-2xl flex flex-col justify-center border-l-4 border-sky-500 relative overflow-hidden group">
+            <div className="absolute top-[-10%] right-[-10%] w-[80px] h-[80px] rounded-full bg-sky-500/5 group-hover:bg-sky-500/10 transition-all blur-md"></div>
+            <p className="font-mono text-[9px] font-black tracking-widest text-zinc-500 mb-1.5 uppercase">Encryption Uplink</p>
+            <p className="font-display text-4xl font-black text-white leading-none">ACTIVE</p>
+          </div>
+          <div className="tactical-glass p-5 rounded-2xl flex flex-col justify-center border-l-4 border-amber-500 relative overflow-hidden group">
+            <div className="absolute top-[-10%] right-[-10%] w-[80px] h-[80px] rounded-full bg-amber-500/5 group-hover:bg-amber-500/10 transition-all blur-md"></div>
+            <p className="font-mono text-[9px] font-black tracking-widest text-zinc-500 mb-1.5 uppercase">Mesh Relay Nodes</p>
+            <p className="font-display text-4xl font-black text-white leading-none">32</p>
+          </div>
+          <div className="tactical-glass p-5 rounded-2xl flex flex-col justify-center border-l-4 border-emerald-500 relative overflow-hidden group">
+            <div className="absolute top-[-10%] right-[-10%] w-[80px] h-[80px] rounded-full bg-emerald-500/5 group-hover:bg-emerald-500/10 transition-all blur-md"></div>
+            <p className="font-mono text-[9px] font-black tracking-widest text-zinc-500 mb-1.5 uppercase">System Core Status</p>
+            <p className="font-display text-xl font-black text-emerald-400 leading-none">OPTIMIZED</p>
+          </div>
         </div>
-        <div className="tactical-glass p-5 rounded-2xl flex flex-col justify-center border-l-4 border-l-sky-500 shadow-[0_0_20px_rgba(14,165,233,0.1)]">
-          <p className="text-[10px] font-black tracking-[0.2em] text-sky-500 mb-1 uppercase">Cloud Link</p>
-          <p className="text-4xl font-black">ACTIVE</p>
-        </div>
-        <div className="tactical-glass p-5 rounded-2xl flex flex-col justify-center border-l-4 border-l-amber-500">
-          <p className="text-[10px] font-black tracking-[0.2em] text-amber-500 mb-1 uppercase">Mesh Nodes</p>
-          <p className="text-4xl font-black">32</p>
-        </div>
-        <div className="tactical-glass p-5 rounded-2xl flex flex-col justify-center border-l-4 border-l-zinc-500">
-          <p className="text-[10px] font-black tracking-[0.2em] text-zinc-400 mb-1 uppercase">System Core</p>
-          <p className="text-xl font-bold text-emerald-400">OPTIMIZED</p>
-        </div>
-      </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-        {/* LEFT COLUMN: LIVE FEED & TACTICAL MAP */}
-        <div className="lg:col-span-4 space-y-8">
-          <div className="tactical-glass rounded-3xl overflow-hidden relative group border border-white/5">
-             <div className="absolute top-4 left-4 z-10 flex items-center gap-2">
+        {/* Dashboard Panels Layout */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+          
+          {/* LEFT COLUMN: LIVE FEED & SAFEPATH RADAR */}
+          <div className="lg:col-span-5 space-y-6">
+            
+            {/* Live Sensor Feed */}
+            <div className="tactical-glass rounded-3xl overflow-hidden relative border border-white/5 group shadow-[0_15px_40px_rgba(0,0,0,0.5)]">
+              <div className="absolute top-4 left-4 z-10 flex items-center gap-2 rounded-full border border-rose-500/30 bg-black/60 px-3 py-1 backdrop-blur-md">
                 <span className="h-2 w-2 bg-rose-500 rounded-full animate-ping"></span>
-                <span className="text-[10px] font-black tracking-widest text-white drop-shadow-md">LOCAL SENSOR HUB</span>
-             </div>
+                <span className="font-mono text-[8px] font-black tracking-widest text-white">AI VISION FEED</span>
+              </div>
               <img 
                 src={`${import.meta.env.VITE_ML_URL || 'http://localhost:5000'}/video_feed`} 
-                alt="AI Stream" 
-                className="w-full aspect-video object-cover grayscale brightness-50 hover:grayscale-0 transition-all duration-700"
+                alt="AI Sensor Stream" 
+                className="w-full aspect-video object-cover grayscale brightness-40 hover:brightness-[0.6] hover:grayscale-[20%] transition-all duration-700"
                 onError={(e) => e.target.src = "https://images.unsplash.com/photo-1451187580459-43490279c0fa?q=80&w=1000&auto=format&fit=crop"}
               />
-          </div>
+            </div>
 
-          <div className="tactical-glass rounded-3xl p-6 relative border border-white/5">
-             <h3 className="text-xs font-black text-sky-400 mb-4 uppercase tracking-[0.3em]">SafePath Real-Time</h3>
-             <div className="aspect-square rounded-2xl bg-zinc-900 border border-white/5 flex flex-col items-center justify-center p-8 text-center relative overflow-hidden">
-                <div className="absolute inset-0 opacity-5 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-sky-500 via-transparent to-transparent"></div>
+            {/* SafePath Vector Radar (AdaptFit Hero Graphic Style Compass) */}
+            <div className="tactical-glass rounded-3xl p-6 border border-white/5 shadow-[0_15px_40px_rgba(0,0,0,0.5)]">
+              <h3 className="font-display text-xs font-black text-sky-400 mb-4 uppercase tracking-[0.25em]">SafePath Vector Radar</h3>
+              
+              <div className="aspect-square rounded-2xl bg-zinc-950/80 border border-white/5 flex flex-col items-center justify-center p-8 text-center relative overflow-hidden">
+                {/* Radial glowing ring */}
+                <div className="absolute inset-0 opacity-[0.03] bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-sky-500 via-transparent to-transparent"></div>
+                
+                {/* Rotating needle */}
                 <div 
-                   className="w-full flex justify-center mb-4 transition-transform duration-1000"
+                   className="w-full flex justify-center mb-6 transition-transform duration-1000 ease-out"
                    style={{ transform: `rotate(${heading || 0}deg)` }}
                 >
-                   <div className="w-2 h-20 bg-emerald-500 rounded-full shadow-[0_0_30px_#10b981] animate-pulse"></div>
+                   <div className="relative w-[3px] h-20 bg-gradient-to-t from-transparent via-emerald-500 to-emerald-400 rounded-full shadow-[0_0_20px_#10b981]">
+                     <div className="absolute top-0 left-[-4px] w-3 h-3 rounded-full bg-emerald-400 animate-ping"></div>
+                   </div>
                 </div>
+                
                 <div className="relative z-10">
-                   <p className="text-xs font-black text-emerald-400 mb-1 uppercase tracking-[0.2em]">
-                     {nextWaypoint || 'SEARCHING...'}
+                   <p className="font-display text-base font-black text-emerald-400 tracking-widest uppercase mb-1">
+                     {nextWaypoint ? `Proceed to ${nextWaypoint}` : 'ANALYZING HAZARDS...'}
                    </p>
-                   <p className="text-[9px] text-zinc-500 font-black uppercase tracking-widest">Vector Heading: {heading?.toFixed(1)}°</p>
+                   <p className="font-mono text-[9px] text-zinc-500 font-bold uppercase tracking-widest">
+                     Heading Vector: {heading?.toFixed(1)}° // Sector Safe
+                   </p>
                 </div>
-             </div>
-          </div>
-
-          <div className="tactical-glass rounded-3xl p-6 border border-white/5">
-             <h3 className="text-xs font-black text-rose-400 mb-4 uppercase tracking-[0.3em]">Global Broadcast</h3>
-             <textarea 
-               value={broadcastText}
-               onChange={(e) => setBroadcastText(e.target.value)}
-               placeholder="ENTER TACTICAL COMMAND..."
-               className="w-full bg-black/50 border border-white/10 rounded-2xl p-4 text-xs text-white focus:border-rose-500 outline-none h-24 mb-4 font-medium"
-             />
-             <button 
-               onClick={handleBroadcast}
-               className="w-full py-4 bg-rose-600 hover:bg-rose-500 text-[10px] font-black tracking-[0.4em] uppercase rounded-2xl transition-all active:scale-95 shadow-lg"
-             >
-                Transmit to Fleet
-             </button>
-          </div>
-        </div>
-
-        {/* RIGHT COLUMN: ALERT TRIAGE FEED */}
-        <div className="lg:col-span-8 flex flex-col h-full">
-          <div className="flex items-center justify-between mb-6">
-             <h2 className="text-2xl font-black tracking-tighter uppercase">
-                Tactical <span className="text-rose-500">Alert</span> Feed
-             </h2>
-             <div className="flex gap-2">
-                <span className="px-3 py-1 bg-zinc-900 border border-white/5 rounded-full text-[8px] font-black text-zinc-500 uppercase tracking-widest">Live Node: 001</span>
-             </div>
-          </div>
-
-          <div className="space-y-4 overflow-y-auto max-h-[850px] pr-2 custom-scrollbar pb-10">
-            {activeThreats.length === 0 ? (
-              <div className="py-24 text-center tactical-glass rounded-[2rem] border border-white/5">
-                <div className="w-12 h-12 border-2 border-zinc-800 border-t-rose-500 rounded-full animate-spin mx-auto mb-4"></div>
-                <p className="text-zinc-600 font-black uppercase tracking-[0.4em] text-[10px]">Scanning Mesh Spectrum...</p>
               </div>
-            ) : (
-              activeThreats.map((alert) => (
-                <div 
-                  key={alert.id} 
-                  className={`tactical-glass p-6 rounded-[2rem] border transition-all hover:bg-white/5 group ${
-                    alert.priority === 'FIRE' || alert.priority === 'CRITICAL' ? 'border-rose-500/30' : 'border-amber-500/30'
-                  }`}
-                >
-                  <div className="flex flex-col md:flex-row justify-between gap-6">
-                    <div className="flex-1">
-                       <div className="flex items-center gap-3 mb-3">
-                          <span className={`px-3 py-1 text-[8px] font-black rounded-full uppercase tracking-widest ${
-                            alert.priority === 'FIRE' || alert.priority === 'CRITICAL' ? 'bg-rose-500 text-white' : 'bg-amber-500 text-black'
-                          }`}>
-                            {alert.priority}
-                          </span>
-                          <span className="text-[8px] font-black text-zinc-500 uppercase tracking-widest">{new Date(alert.timestamp).toLocaleTimeString()}</span>
-                       </div>
-                       <h4 className="text-xl font-bold mb-3 text-zinc-100 leading-tight">{alert.message}</h4>
-                       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-[9px] font-black text-zinc-500 uppercase tracking-widest">
-                          <div>
-                            <p className="text-zinc-600 mb-0.5">Location</p>
-                            <p className="text-white">RM {alert.roomNumber}</p>
-                          </div>
-                          <div>
-                            <p className="text-zinc-600 mb-0.5">Floor</p>
-                            <p className="text-white">{alert.floor || '3'}</p>
-                          </div>
-                          <div>
-                            <p className="text-zinc-600 mb-0.5">ID</p>
-                            <p className="text-white">#{alert.userId?.slice(-4)}</p>
-                          </div>
-                          <div>
-                            <p className="text-zinc-600 mb-0.5">Status</p>
-                            <p className="text-sky-400">{alert.status}</p>
-                          </div>
-                       </div>
-                    </div>
-                    <div className="flex flex-row md:flex-col gap-2 justify-center">
-                       <button 
-                         onClick={() => handleAcknowledge(alert)}
-                         className="px-6 py-3 bg-zinc-900 border border-white/5 text-zinc-400 text-[9px] font-black rounded-xl hover:bg-sky-600 hover:text-white hover:border-sky-600 transition-all uppercase tracking-[0.2em]"
-                       >
-                         Acknowledge
-                       </button>
-                       <button 
-                         onClick={() => handleResolve(alert)}
-                         className="px-6 py-3 bg-zinc-900 border border-white/5 text-zinc-400 text-[9px] font-black rounded-xl hover:bg-emerald-600 hover:text-white hover:border-emerald-600 transition-all uppercase tracking-[0.2em]"
-                       >
-                         Resolve
-                       </button>
-                    </div>
-                  </div>
-                </div>
-              ))
-            )}
+            </div>
+
+            {/* Global Fleet Broadcast */}
+            <div className="tactical-glass rounded-3xl p-6 border border-white/5 shadow-[0_15px_40px_rgba(0,0,0,0.5)]">
+              <h3 className="font-display text-xs font-black text-rose-400 mb-4 uppercase tracking-[0.25em]">Global Alert Override</h3>
+              
+              <textarea 
+                value={broadcastText}
+                onChange={(e) => setBroadcastText(e.target.value)}
+                placeholder="ENTER COMMAND TEXT..."
+                className="w-full bg-zinc-950/60 border border-white/10 rounded-2xl p-4 text-xs text-white focus:border-rose-500/60 focus:ring-1 focus:ring-rose-500/20 outline-none h-24 mb-4 font-semibold placeholder:text-zinc-800 resize-none transition"
+              />
+              
+              <button 
+                onClick={handleBroadcast}
+                className="w-full py-3.5 bg-rose-600 hover:bg-rose-500 text-[10px] font-black tracking-[0.3em] uppercase rounded-xl transition-all active:scale-95 shadow-[0_4px_20px_rgba(239,68,68,0.2)] cursor-pointer"
+              >
+                Transmit Broadcast
+              </button>
+            </div>
+
           </div>
+
+          {/* RIGHT COLUMN: ALERT TRIAGE FEED */}
+          <div className="lg:col-span-7 flex flex-col h-full space-y-6">
+            
+            <div className="flex items-center justify-between">
+              <h2 className="font-display text-xl font-black tracking-tight uppercase">
+                Active <span className="text-rose-500">Telemetry Feed</span>
+              </h2>
+              <span className="rounded-full border border-white/5 bg-zinc-900 px-3 py-1 font-mono text-[8px] font-black text-zinc-500 uppercase tracking-widest">
+                GDC LIVE // FEED:001
+              </span>
+            </div>
+
+            {/* Feed List */}
+            <div className="space-y-4 max-h-[850px] overflow-y-auto pr-2 custom-scrollbar pb-12">
+              {activeThreats.length === 0 ? (
+                <div className="py-24 text-center tactical-glass rounded-3xl border border-white/5 flex flex-col items-center justify-center">
+                  <div className="w-10 h-10 border-2 border-zinc-800 border-t-rose-500 rounded-full animate-spin mb-4"></div>
+                  <p className="text-zinc-500 font-mono font-black uppercase tracking-[0.3em] text-[9px]">Scanning mesh spectra...</p>
+                </div>
+              ) : (
+                activeThreats.map((alert) => {
+                  const isCritical = alert.priority === 'FIRE' || alert.priority === 'CRITICAL';
+                  
+                  return (
+                    <div 
+                      key={alert.id} 
+                      className={`tactical-glass p-6 rounded-3xl border transition-all hover:bg-white/5 group shadow-lg ${
+                        isCritical ? 'border-rose-500/20 hover:border-rose-500/40' : 'border-amber-500/20 hover:border-amber-500/40'
+                      }`}
+                    >
+                      <div className="flex flex-col md:flex-row justify-between gap-6">
+                        <div className="flex-1">
+                          
+                          {/* Alert Meta */}
+                          <div className="flex items-center gap-3.5 mb-3.5">
+                            <span className={`px-3 py-1 text-[8px] font-black rounded-full uppercase tracking-widest ${
+                              isCritical ? 'bg-rose-500/10 text-rose-400 border border-rose-500/30' : 'bg-amber-500/10 text-amber-400 border border-amber-500/30'
+                            }`}>
+                              {alert.priority}
+                            </span>
+                            <span className="font-mono text-[9px] font-bold text-zinc-500 uppercase tracking-widest">
+                              {new Date(alert.timestamp).toLocaleTimeString()}
+                            </span>
+                          </div>
+
+                          {/* Message */}
+                          <h4 className="text-lg font-bold mb-4 text-white leading-snug">{alert.message}</h4>
+
+                          {/* Attributes Table */}
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 border-t border-white/5 pt-4">
+                            <div>
+                              <p className="font-mono text-[8px] font-bold text-zinc-500 uppercase tracking-widest mb-0.5">Location</p>
+                              <p className="font-display text-xs font-black text-white">RM {alert.roomNumber}</p>
+                            </div>
+                            <div>
+                              <p className="font-mono text-[8px] font-bold text-zinc-500 uppercase tracking-widest mb-0.5">Floor</p>
+                              <p className="font-display text-xs font-black text-white">{alert.floor || '3rd'}</p>
+                            </div>
+                            <div>
+                              <p className="font-mono text-[8px] font-bold text-zinc-500 uppercase tracking-widest mb-0.5">Node ID</p>
+                              <p className="font-mono text-xs font-bold text-white">#{alert.userId?.slice(-4)}</p>
+                            </div>
+                            <div>
+                              <p className="font-mono text-[8px] font-bold text-zinc-500 uppercase tracking-widest mb-0.5">Status</p>
+                              <p className="font-display text-xs font-black text-sky-400 uppercase tracking-wider">{alert.status}</p>
+                            </div>
+                          </div>
+
+                        </div>
+
+                        {/* Action buttons */}
+                        <div className="flex flex-row md:flex-col gap-2 justify-center border-t md:border-t-0 md:border-l border-white/5 pt-4 md:pt-0 md:pl-6 flex-shrink-0">
+                          <button 
+                            onClick={() => handleAcknowledge(alert)}
+                            className="flex-1 md:flex-initial px-5 py-3 bg-zinc-950/60 border border-white/10 text-zinc-400 text-[9px] font-black rounded-xl hover:bg-sky-600 hover:text-white hover:border-sky-600 transition-all uppercase tracking-widest cursor-pointer"
+                          >
+                            ACK
+                          </button>
+                          <button 
+                            onClick={() => handleResolve(alert)}
+                            className="flex-1 md:flex-initial px-5 py-3 bg-zinc-950/60 border border-white/10 text-zinc-400 text-[9px] font-black rounded-xl hover:bg-emerald-600 hover:text-white hover:border-emerald-600 transition-all uppercase tracking-widest cursor-pointer"
+                          >
+                            RESOLVE
+                          </button>
+                        </div>
+
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+          </div>
+
         </div>
-      </div>
+
+      </main>
     </div>
-  )
+  );
 }
 
-export default Dashboard
+export default Dashboard;

@@ -2,10 +2,11 @@ import cv2
 import numpy as np
 import requests
 import time
-from flask import Flask, Response
+from flask import Flask, Response, send_file
 from ultralytics import YOLO
 import os
 import threading
+from emergency_dispatch import dispatch as emergency_dispatch, SNAPSHOT_PATH
 
 app = Flask(__name__)
 
@@ -14,15 +15,41 @@ model = YOLO('yolov8n.pt')
 
 # 2. CONFIGURATION PARAMETERS
 THREAT_LABELS = ['knife', 'scissors', 'baseball bat', 'cell phone'] 
-CROWD_LIMIT = 5         
-RUSH_THRESHOLD = 40000   
-FIGHT_INTENSITY = 55     
+CROWD_LIMIT = 2         
+RUSH_THRESHOLD = 8000   
+FIGHT_INTENSITY = 25     
 HOTEL_ID = "GLOBAL" 
-BACKEND_URL = os.getenv("VANGUARD_BACKEND_URL", "https://vanguard-total-2.onrender.com/api/alerts")
+# Dynamically detect backend URL (support local dev server fallback)
+backend_url_target = "http://localhost:8080/api/alerts"
+try:
+    # Check parent directories for .env config
+    possible_paths = [
+        os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".env")),
+        os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".env")),
+        os.path.abspath(os.path.join(os.getcwd(), ".env")),
+    ]
+    for env_path in possible_paths:
+        if os.path.exists(env_path):
+            with open(env_path, "r") as f:
+                for line in f:
+                    if "=" in line and not line.strip().startswith("#"):
+                        k, v = line.strip().split("=", 1)
+                        if k.strip() == "VANGUARD_BACKEND_URL":
+                            val = v.strip().strip('"').strip("'")
+                            backend_url_target = f"{val}/api/alerts"
+                            break
+            break
+except Exception as e:
+    print("⚠️ Failed parsing local .env config:", e)
+
+# Always prefer the locally-parsed .env value over any stale OS env var
+# (OS env var may still point to the old Render production URL)
+BACKEND_URL = backend_url_target
+print(f"📡 CCTV Targeted Backend Endpoint: {BACKEND_URL}")
 
 # 3. GLOBAL STATE
 last_alert_time = 0
-ALERT_COOLDOWN = 10 
+ALERT_COOLDOWN = 5 
 latest_frame = None
 lock = threading.Lock()
 
@@ -113,17 +140,40 @@ def ai_detection_loop():
         if fight_detected: fight_counter += 1
         else: fight_counter = max(0, fight_counter - 1)
 
+        for label, coords in threats_found:
+            cv2.rectangle(frame, (coords[0], coords[1]), (coords[2], coords[3]), (0, 0, 255), 3)
+            send_vanguard_alert(f"AI THREAT: Weapon Detected ({label})", "THREAT", "CRITICAL")
+            # Fire LLM-powered emergency dispatch with snapshot
+            alert_payload = {
+                "message": f"AI THREAT: Weapon Detected ({label})",
+                "priority": "CRITICAL",
+                "roomNumber": "R301",
+                "floor": "3",
+                "hotelId": HOTEL_ID,
+            }
+            emergency_dispatch(alert_payload, frame=frame, guest_count=len(person_boxes))
+
         if fight_counter > 10:
             cv2.putText(frame, "⚠️ FIGHT DETECTED", (50, 150), 2, 1, (0,0,255), 3)
             send_vanguard_alert("AI THREAT: Physical Altercation", "THREAT", "CRITICAL")
+            emergency_dispatch({
+                "message": "AI THREAT: Physical Altercation Detected",
+                "priority": "CRITICAL",
+                "roomNumber": "R301",
+                "floor": "3",
+                "hotelId": HOTEL_ID,
+            }, frame=frame, guest_count=len(person_boxes))
 
         if len(person_boxes) > CROWD_LIMIT and movement_score > RUSH_THRESHOLD:
             cv2.putText(frame, "🚨 STAMPEDE RISK", (50, 50), 2, 1, (0,0,255), 3)
             send_vanguard_alert("AI THREAT: Stampede Detected", "THREAT", "CRITICAL")
-
-        for label, coords in threats_found:
-            cv2.rectangle(frame, (coords[0], coords[1]), (coords[2], coords[3]), (0, 0, 255), 3)
-            send_vanguard_alert(f"AI THREAT: Weapon Detected ({label})", "THREAT", "CRITICAL")
+            emergency_dispatch({
+                "message": f"AI THREAT: Stampede Risk — {len(person_boxes)} people detected",
+                "priority": "CRITICAL",
+                "roomNumber": "Lobby",
+                "floor": "1",
+                "hotelId": HOTEL_ID,
+            }, frame=frame, guest_count=len(person_boxes))
 
         prev_gray = gray
         with lock:
@@ -145,6 +195,14 @@ def gen_frames():
 @app.route('/video_feed')
 def video_feed():
     return Response(gen_frames(), mimetype='multipart/x-mixed-replace; boundary=frame')
+
+@app.route('/snapshot')
+def snapshot():
+    """Serve the latest threat snapshot — used by Twilio to attach image in WhatsApp."""
+    if os.path.exists(SNAPSHOT_PATH):
+        return send_file(SNAPSHOT_PATH, mimetype='image/jpeg')
+    # Return a 1x1 blank if no snapshot yet
+    return Response(b'', status=404)
 
 if __name__ == '__main__':
     # Start AI in a background thread

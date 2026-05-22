@@ -108,12 +108,12 @@ function computeExitPlan(floors, roomLabel) {
 }
  
 const CSTY = {
-  wall:     { bg: "#050505", border: "#111" },
-  corridor: { bg: "#0a0a0f", border: "#1a1a25" },
-  room:     { bg: "#0f172a", border: "#1e293b", text: "#38bdf8" },
-  exit:     { bg: "#450a0a", border: "#991b1b", text: "#f87171" },
-  stair:    { bg: "#451a03", border: "#92400e", text: "#fbbf24" },
-  elevator: { bg: "#2e1065", border: "#5b21b6", text: "#a78bfa" },
+  wall:     { bg: "transparent", border: "rgba(255, 255, 255, 0.01)" },
+  corridor: { bg: "rgba(24, 24, 27, 0.2)", border: "rgba(255, 255, 255, 0.03)" },
+  room:     { bg: "rgba(14, 165, 233, 0.05)", border: "rgba(14, 165, 233, 0.15)", text: "#38bdf8" },
+  exit:     { bg: "rgba(239, 68, 68, 0.1)", border: "rgba(239, 68, 68, 0.25)", text: "#f87171" },
+  stair:    { bg: "rgba(245, 158, 11, 0.08)", border: "rgba(245, 158, 11, 0.2)", text: "#fbbf24" },
+  elevator: { bg: "rgba(139, 92, 246, 0.08)", border: "rgba(139, 92, 246, 0.2)", text: "#a78bfa" },
 };
  
 export default function HotelMapSystem({ onClose }) {
@@ -145,94 +145,117 @@ export default function HotelMapSystem({ onClose }) {
   const totalSteps = activePlan?.segments.reduce((a, s) => a + Math.max(0, s.path.length - 1), 0) ?? 0;
  
   return (
-    <div className="min-h-screen bg-black text-zinc-100 flex flex-col hud-font p-6 md:p-12 overflow-hidden">
+    <div className="min-h-screen bg-[#030303] text-zinc-100 flex flex-col p-6 md:p-12 overflow-hidden relative">
+      <div className="cyber-grid absolute inset-0"></div>
+
       {/* HEADER */}
-      <div className="flex justify-between items-center mb-8 tactical-glass p-6 rounded-3xl">
+      <div className="flex justify-between items-center mb-8 tactical-glass p-6 rounded-3xl border border-white/5 relative z-10">
         <div className="flex items-center gap-4">
-          <div className="w-12 h-12 bg-sky-500/20 text-sky-400 rounded-2xl flex items-center justify-center text-2xl border border-sky-500/30">🧭</div>
+          <div className="w-12 h-12 bg-sky-500/10 text-sky-400 rounded-2xl flex items-center justify-center text-2xl border border-sky-500/20 shadow-[0_0_15px_rgba(14,165,233,0.15)]">🧭</div>
           <div>
-            <h2 className="hud-title text-xl font-black text-white">EVACUATION <span className="text-sky-500">RADAR</span></h2>
-            <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-[0.3em]">Facility Grid Analysis</p>
+            <h2 className="font-display text-xl font-black text-white uppercase tracking-wider">EVACUATION MAP</h2>
+            <p className="text-[9px] text-zinc-500 font-bold uppercase tracking-[0.25em] mt-0.5">Facility Grid Routing Radar</p>
           </div>
         </div>
-        <button onClick={onClose} className="px-8 py-3 bg-rose-600 hover:bg-rose-500 text-white font-black text-[10px] rounded-xl tracking-widest uppercase transition-all">EXIT MAP</button>
+        <button 
+          onClick={onClose} 
+          className="px-8 py-3.5 bg-rose-600 hover:bg-rose-500 text-white font-black text-[10px] rounded-xl tracking-widest uppercase transition-all shadow-[0_4px_25px_rgba(239,68,68,0.25)] cursor-pointer"
+        >
+          Exit Map View
+        </button>
       </div>
-
-      <div className="flex flex-1 gap-8 overflow-hidden">
+ 
+      <div className="flex flex-col md:flex-row flex-1 gap-8 overflow-hidden relative z-10">
         {/* SIDEBAR */}
-        <div className="w-64 space-y-6">
-          <div className="tactical-glass p-6 rounded-3xl">
-            <h3 className="text-[10px] font-black text-sky-500 tracking-widest uppercase mb-4">Current Route</h3>
+        <div className="w-full md:w-64 space-y-4 md:space-y-6 flex-shrink-0">
+          <div className="tactical-glass p-6 rounded-3xl border border-white/5">
+            <h3 className="text-[9px] font-black text-sky-400 tracking-widest uppercase mb-4">Calculated Route</h3>
             {activePlan ? (
               <div className="space-y-4">
-                <p className="text-sm font-bold text-white">ROOM {activePlan.roomLabel}</p>
-                <div className="p-3 bg-white/5 rounded-xl border border-white/5">
-                   <p className="text-[9px] text-zinc-500 uppercase">Estimated Path</p>
-                   <p className="text-lg font-black text-emerald-400">{totalSteps} STEPS</p>
+                <div>
+                  <span className="text-[8px] font-bold text-zinc-500 uppercase tracking-widest">Origin room</span>
+                  <p className="text-xl font-black text-white mt-0.5">ROOM {activePlan.roomLabel}</p>
+                </div>
+                <div className="p-4 bg-zinc-950/60 rounded-2xl border border-white/5">
+                  <p className="text-[8px] text-zinc-500 uppercase tracking-widest">Evac Distance</p>
+                  <p className="text-2xl font-black text-emerald-400 mt-1">{totalSteps} STEPS</p>
                 </div>
               </div>
             ) : (
-              <p className="text-xs text-zinc-600 font-medium italic">Click any ROOM on the grid to calculate escape route.</p>
+              <p className="text-xs text-zinc-500 leading-relaxed font-medium italic">Click any highlighted ROOM on the map grid to compute a SafePath escape vector.</p>
             )}
           </div>
-
-          <div className="tactical-glass p-6 rounded-3xl">
-             <h3 className="text-[10px] font-black text-rose-500 tracking-widest uppercase mb-4">Legend</h3>
-             <div className="space-y-3">
-                <div className="flex items-center gap-3 text-[10px] font-bold text-zinc-400"><div className="w-3 h-3 bg-[#f87171] rounded-sm"></div> EMERGENCY EXIT</div>
-                <div className="flex items-center gap-3 text-[10px] font-bold text-zinc-400"><div className="w-3 h-3 bg-[#fbbf24] rounded-sm"></div> FIRE STAIRS</div>
-                <div className="flex items-center gap-3 text-[10px] font-bold text-zinc-400"><div className="w-3 h-3 bg-[#0ebd66] rounded-sm shadow-[0_0_8px_#0ebd66]"></div> SAFE PATH</div>
-             </div>
+ 
+          <div className="tactical-glass p-6 rounded-3xl border border-white/5">
+            <h3 className="text-[9px] font-black text-rose-500 tracking-widest uppercase mb-4">Tactical Legend</h3>
+            <div className="space-y-3.5">
+              <div className="flex items-center gap-3 text-[10px] font-bold text-zinc-400">
+                <div className="w-3.5 h-3.5 bg-rose-500/20 border border-rose-500/40 rounded-md"></div>
+                EMERGENCY EXIT
+              </div>
+              <div className="flex items-center gap-3 text-[10px] font-bold text-zinc-400">
+                <div className="w-3.5 h-3.5 bg-amber-500/20 border border-amber-500/40 rounded-md"></div>
+                FIRE ESCAPE STAIRS
+              </div>
+              <div className="flex items-center gap-3 text-[10px] font-bold text-zinc-400">
+                <div className="w-3.5 h-3.5 bg-emerald-500/20 border border-emerald-500/60 rounded-md shadow-[0_0_8px_rgba(16,185,129,0.3)]"></div>
+                SAFE VECTOR
+              </div>
+            </div>
           </div>
         </div>
-
+ 
         {/* MAP GRID AREA */}
-        <div className="flex-1 flex flex-col">
-          <div className="flex gap-2 mb-2">
+        <div className="flex-1 flex flex-col min-h-0">
+          <div className="flex gap-2">
             {[0, 1, 2].map(i => (
               <button 
                 key={i} 
                 onClick={() => setSelFloor(i)}
-                className={`px-6 py-2 rounded-t-xl text-[10px] font-black uppercase tracking-widest transition-all ${
-                  selFloor === i ? 'bg-sky-600 text-white' : 'bg-zinc-900 text-zinc-600 hover:bg-zinc-800'
+                className={`px-6 py-3 rounded-t-2xl text-[9px] font-black uppercase tracking-widest transition-all cursor-pointer ${
+                  selFloor === i 
+                    ? 'bg-sky-600 border-t border-x border-sky-500 text-white shadow-[0_-5px_15px_rgba(14,165,233,0.15)]' 
+                    : 'bg-zinc-950 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-900 border-t border-x border-white/5'
                 }`}
               >
                 FLOOR {i+1}
               </button>
             ))}
           </div>
-
-          <div className="tactical-glass p-8 rounded-b-3xl rounded-tr-3xl flex-1 flex items-center justify-center bg-black/40">
-             <div className="grid gap-2 overflow-auto" style={{ gridTemplateColumns: `repeat(${COLS}, 50px)` }}>
-               {curGrid.map((row, r) => row.map((cell, c) => {
-                 const key = `${r},${c}`;
-                 const isPath = pathSet.has(key);
-                 const pathIdx = pathArr.findIndex(p => p.r === r && p.c === c);
-                 const isLit = isPath && pathIdx <= (animStep % (pathArr.length + 5));
-                 const cs = CSTY[cell.type];
-
-                 return (
-                   <div 
-                     key={key}
-                     onClick={() => handleCell(r, c)}
-                     className={`w-[50px] h-[50px] rounded-lg border transition-all flex flex-col items-center justify-center cursor-pointer hover:scale-105 active:scale-95 ${
-                       isLit ? 'shadow-[0_0_15px_rgba(16,185,129,0.5)] border-emerald-500 bg-emerald-500/20' : ''
-                     }`}
-                     style={{ 
-                       background: isLit ? undefined : cs.bg, 
-                       borderColor: isLit ? undefined : cs.border 
-                     }}
-                   >
-                     {cell.type === T.ROOM && <span className="text-[10px] font-black text-white">{cell.label}</span>}
-                     {cell.type === T.EXIT && <span className="text-xl">🚪</span>}
-                     {cell.type === T.STAIR && <span className="text-xl">🪜</span>}
-                     {cell.type === T.ELEVATOR && <span className="text-xl">🛗</span>}
-                     {isPath && !isLit && <div className="w-1.5 h-1.5 rounded-full bg-emerald-900"></div>}
-                     {isLit && <div className="w-2.5 h-2.5 rounded-full bg-emerald-400 shadow-[0_0_10px_#10b981]"></div>}
-                   </div>
-                 );
-               }))}
-             </div>
+ 
+          <div className="tactical-glass p-8 rounded-b-3xl rounded-tr-3xl flex-1 flex items-center justify-center bg-zinc-950/20 border border-white/5 overflow-auto">
+            <div className="grid gap-2 p-4 rounded-2xl bg-black/60 border border-white/5" style={{ gridTemplateColumns: `repeat(${COLS}, 54px)` }}>
+              {curGrid.map((row, r) => row.map((cell, c) => {
+                const key = `${r},${c}`;
+                const isPath = pathSet.has(key);
+                const pathIdx = pathArr.findIndex(p => p.r === r && p.c === c);
+                const isLit = isPath && pathIdx <= (animStep % (pathArr.length + 5));
+                const cs = CSTY[cell.type];
+ 
+                return (
+                  <div 
+                    key={key}
+                    onClick={() => handleCell(r, c)}
+                    className={`w-[54px] h-[54px] rounded-xl border flex flex-col items-center justify-center cursor-pointer transition-all duration-300 ${
+                      isLit 
+                        ? 'shadow-[0_0_15px_rgba(16,185,129,0.3)] border-emerald-500 bg-emerald-500/25 scale-105' 
+                        : 'hover:scale-[1.05] hover:border-zinc-700 hover:bg-zinc-900/40 active:scale-95'
+                    }`}
+                    style={{ 
+                      background: isLit ? undefined : cs.bg, 
+                      borderColor: isLit ? undefined : cs.border 
+                    }}
+                  >
+                    {cell.type === T.ROOM && <span className="text-[10px] font-black text-white">{cell.label}</span>}
+                    {cell.type === T.EXIT && <span className="text-lg">🚪</span>}
+                    {cell.type === T.STAIR && <span className="text-lg">🪜</span>}
+                    {cell.type === T.ELEVATOR && <span className="text-lg">🛗</span>}
+                    {isPath && !isLit && <div className="w-1.5 h-1.5 rounded-full bg-emerald-950"></div>}
+                    {isLit && <div className="w-2.5 h-2.5 rounded-full bg-emerald-400 shadow-[0_0_10px_#10b981]"></div>}
+                  </div>
+                );
+              }))}
+            </div>
           </div>
         </div>
       </div>
