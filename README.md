@@ -36,8 +36,15 @@ Built for **Mission-Critical Resilience**, Vanguard uses a dual-layer AI strateg
 - **Intelligence**: Gemini 2.5 Flash (Free Tier), YOLOv8, Flask
 - **Backend**: Java 21 (Spring Boot), Maven
 - **Frontend**: React + Tailwind 4 (Tactical HUD System)
+- **Mobile**: Android (Nearby API)
 - **Communications**: P2P Mesh Simulation, SSE (Server-Sent Events)
 - **Data**: Firebase / Firestore
+
+---
+
+### 🚨 Key Engineering Rules
+
+- **Emergency Packets:** All emergency packets must have a TTL (Time-to-Live) and a unique ID for deduplication.
 
 ---
 
