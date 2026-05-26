@@ -1,0 +1,229 @@
+@import "tailwindcss";
+
+@theme {
+  --color-brand-red: #ef4444;
+  --color-brand-amber: #f59e0b;
+  --color-brand-emerald: #10b981;
+  --color-brand-sky: #0ea5e9;
+  
+  --font-sans: 'Plus Jakarta Sans', 'Inter', system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+  --font-display: 'Space Grotesk', 'Plus Jakarta Sans', sans-serif;
+}
+
+/* CYBERSECURITY/TACTICAL UI DESIGN SYSTEM */
+
+:root {
+  color-scheme: dark;
+  --bg-primary: #030303;
+  --glass-bg: rgba(9, 9, 11, 0.45);
+  --glass-border: rgba(255, 255, 255, 0.05);
+}
+
+body {
+  background-color: var(--bg-primary);
+  background-image: 
+    radial-gradient(circle at 50% -20%, rgba(139, 92, 246, 0.08) 0%, transparent 60%),
+    radial-gradient(circle at 0% 100%, rgba(239, 68, 68, 0.04) 0%, transparent 50%),
+    radial-gradient(circle at 100% 100%, rgba(16, 185, 129, 0.04) 0%, transparent 50%);
+  color: #f4f4f5;
+  overflow-x: hidden;
+  font-family: var(--font-sans);
+  min-height: 100vh;
+}
+
+/* Premium Web Constellation/Grid Background */
+.cyber-grid {
+  position: absolute;
+  inset: 0;
+  background-image: 
+    linear-gradient(rgba(255, 255, 255, 0.007) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.007) 1px, transparent 1px);
+  background-size: 50px 50px;
+  background-position: center;
+  mask-image: radial-gradient(circle at center, black 40%, transparent 80%);
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Glassmorphism Panels */
+.tactical-glass {
+  background: var(--glass-bg);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--glass-border);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.tactical-glass:hover {
+  border-color: rgba(255, 255, 255, 0.09);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6);
+}
+
+/* Glowing Neon Elements */
+.glow-purple {
+  box-shadow: 0 0 30px -5px rgba(139, 92, 246, 0.2);
+}
+.glow-rose {
+  box-shadow: 0 0 35px -5px rgba(239, 68, 68, 0.25);
+}
+.glow-emerald {
+  box-shadow: 0 0 30px -5px rgba(16, 185, 129, 0.2);
+}
+.glow-sky {
+  box-shadow: 0 0 30px -5px rgba(14, 165, 233, 0.2);
+}
+
+/* Gradient Text styles */
+.gradient-text-purple {
+  background: linear-gradient(135deg, #a78bfa 0%, #ec4899 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.gradient-text-rose {
+  background: linear-gradient(135deg, #f43f5e 0%, #f97316 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.gradient-text-cyan {
+  background: linear-gradient(135deg, #38bdf8 0%, #8b5cf6 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.3);
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+/* Scanline Overlay & Shaders */
+.scanline-container {
+  overflow: hidden;
+  position: relative;
+}
+
+.scanline-container::after {
+  content: " ";
+  display: block;
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  right: 0;
+  background: linear-gradient(
+    rgba(18, 16, 16, 0) 50%, 
+    rgba(0, 0, 0, 0.15) 50%
+  );
+  z-index: 2;
+  background-size: 100% 4px;
+  pointer-events: none;
+}
+
+/* Animations */
+@keyframes pulse-red-bg {
+  0% { background-color: rgba(239, 68, 68, 0); }
+  50% { background-color: rgba(239, 68, 68, 0.04); }
+  100% { background-color: rgba(239, 68, 68, 0); }
+}
+
+.animate-pulse-red {
+  animation: pulse-red-bg 2s infinite ease-in-out;
+}
+
+@keyframes voice-bar {
+  0% { height: 25%; }
+  50% { height: 100%; }
+  100% { height: 25%; }
+}
+
+.animate-voice-bar {
+  animation: voice-bar 0.7s infinite ease-in-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: scale(0.97); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* HUD Typography */
+.hud-title {
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-weight: 800;
+  font-family: var(--font-display);
+}
+
+.hud-font {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0px) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-8px) rotate(1deg);
+  }
+}
+
+.animate-float-slow {
+  animation: float 7s ease-in-out infinite;
+}
+
+.animate-float-delayed {
+  animation: float 9s ease-in-out infinite;
+  animation-delay: 2.5s;
+}
+
+/* ─── TARS: Tactical Audio Response System Visuals ─── */
+
+@keyframes critical-flash-overlay {
+  0%, 100% { opacity: 0.3; }
+  50% { opacity: 1; }
+}
+
+.animate-critical-flash {
+  animation: critical-flash-overlay 2s ease-in-out infinite;
+}
+
+@keyframes screen-edge-glow {
+  0%, 100% {
+    box-shadow: inset 0 0 60px 5px rgba(239, 68, 68, 0.02);
+  }
+  50% {
+    box-shadow: inset 0 0 120px 30px rgba(239, 68, 68, 0.06);
+  }
+}
+
+.critical-screen-overlay {
+  animation: screen-edge-glow 1.8s ease-in-out infinite;
+}
+
+/* TARS HUD Card pulse when CRITICAL */
+@keyframes tars-critical-glow {
+  0%, 100% {
+    box-shadow: 0 0 20px rgba(239, 68, 68, 0);
+  }
+  50% {
+    box-shadow: 0 0 40px rgba(239, 68, 68, 0.15);
+  }
+}
