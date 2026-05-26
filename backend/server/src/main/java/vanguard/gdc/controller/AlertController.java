@@ -4,6 +4,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import vanguard.gdc.model.EmergencyPacketDto;
 import vanguard.EvacuationPathfinder;
+import vanguard.gdc.service.SmsService;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -31,6 +32,7 @@ public class AlertController {
 
     private final RestTemplate restTemplate = new RestTemplate();
     private final String apiKey = System.getenv("GOOGLE_API_KEY") != null ? System.getenv("GOOGLE_API_KEY") : "DEMO_KEY";
+    private final SmsService smsService = new SmsService();
 
     public AlertController() {
     }
@@ -68,6 +70,9 @@ public class AlertController {
 
         System.out.println("[VANGUARD] !!! SOS RECEIVED FROM ROOM " + packet.getRoomNumber() + " !!!");
         System.out.println("[VANGUARD] Message: " + packet.getMessage());
+
+        // Trigger Twilio SMS Alert
+        smsService.sendEmergencySms(packet);
 
         activeAlerts.put(packet.getUniqueId(), packet);
         

@@ -28,6 +28,13 @@
       <artifactId>json</artifactId>
       <version>20231013</version>
     </dependency>
+
+    <!-- Dotenv for loading .env variables -->
+    <dependency>
+      <groupId>io.github.cdimascio</groupId>
+      <artifactId>dotenv-java</artifactId>
+      <version>3.0.0</version>
+    </dependency>
   </dependencies>
   <build>
     <plugins>
