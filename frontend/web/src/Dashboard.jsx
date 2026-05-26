@@ -96,9 +96,18 @@ const Dashboard = () => {
       if (!window.speechSynthesis) return;
       window.speechSynthesis.cancel();
 
+      // Only speak for CRITICAL threats
+      const level = tars.classifyThreat({
+        message: alert.message,
+        priority: alert.priority,
+        hazardType: alert.emergencyType || alert.contextType,
+        confidence: alert.aiConfidence || 0,
+      });
+      if (level !== 'CRITICAL') return;
+
       const room = alert.roomNumber || 'unknown';
       const msg = alert.message || 'Emergency detected';
-      const text = `VANGUARD ALERT. ${alert.priority === 'CRITICAL' ? 'Critical threat detected.' : 'Warning.'} Room ${room}. ${msg}. All personnel respond immediately.`;
+      const text = `VANGUARD ALERT. Critical threat detected. Room ${room}. ${msg}. All personnel respond immediately.`;
 
       const utterance = new SpeechSynthesisUtterance(text);
       utterance.rate = 0.88;
@@ -151,10 +160,12 @@ const Dashboard = () => {
 
       tars.triggerByLevel(level);
       setTarsLevel(level);
-      setIsAlarmPlaying(true);
 
       if (level === 'CRITICAL') {
+        setIsAlarmPlaying(true);
         setIsCriticalOverlay(true);
+      } else {
+        setIsAlarmPlaying(false);
       }
 
       return level;

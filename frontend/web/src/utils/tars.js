@@ -226,10 +226,19 @@ class TARS {
   triggerByLevel(level) {
     this.silence(); // Stop any existing sounds first
     switch (level) {
-      case 'LOW':      this.playLow(); break;
-      case 'MEDIUM':   this.playMedium(); break;
-      case 'CRITICAL': this.playCritical(); break;
-      default:         this.playLow();
+      case 'LOW':
+        // Silent for low-level alerts
+        this.currentLevel = 'LOW';
+        break;
+      case 'MEDIUM':
+        // Silent for medium-level alerts
+        this.currentLevel = 'MEDIUM';
+        break;
+      case 'CRITICAL':
+        this.playCritical();
+        break;
+      default:
+        break;
     }
     return level;
   }
