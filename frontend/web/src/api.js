@@ -1,7 +1,9 @@
 import axios from 'axios';
 
-// This is the connection to your backend server
-export const baseURL = import.meta.env.VITE_API_URL || (typeof window !== 'undefined' ? `http://${window.location.hostname || 'localhost'}:8080/api` : 'http://localhost:8080/api');
+// This is the connection to your backend server.
+// In production (Vercel), VITE_API_URL = https://&lt;ngrok-url&gt;/api
+// The Flask ML server proxies all /api/* requests to the Java backend on :8080.
+export const baseURL = import.meta.env.VITE_API_URL || 'http://localhost:8080/api';
 const API = axios.create({ baseURL });
 
 // This adds your token to every request so the server knows who you are

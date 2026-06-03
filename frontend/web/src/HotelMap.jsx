@@ -73,7 +73,7 @@ function bfs(grid, startR, startC, isTarget, blockedSet) {
   return null;
 }
  
-function computeExitPlan(floors, roomLabel, blockedSets) {
+function computeExitPlan(floors, roomLabel, blockedSets, isWheelchairActive) {
   let roomFloor = -1, roomR = -1, roomC = -1;
   outer: for (let f = 0; f < floors.length; f++)
     for (let r = 0; r < ROWS; r++)
@@ -82,7 +82,10 @@ function computeExitPlan(floors, roomLabel, blockedSets) {
           [roomFloor, roomR, roomC] = [f, r, c]; break outer;
         }
   if (roomFloor === -1) return null;
-  const isConnector = cell => cell.type === T.STAIR || cell.type === T.ELEVATOR;
+  const isConnector = cell => {
+    if (isWheelchairActive) return cell.type === T.ELEVATOR;
+    return cell.type === T.STAIR || cell.type === T.ELEVATOR;
+  };
   const isExit = cell => cell.type === T.EXIT;
   const segments = [];
   if (roomFloor === 0) {
@@ -143,7 +146,16 @@ export default function HotelMapSystem({ onClose }) {
     const blocked = new Map();
     const floorNum = floorIdx + 1;
     
+    // Only FIRE / HAZARD type alerts block map cells — not general guest SOS alerts
+    const HAZARD_TYPES = new Set(['FIRE', 'HEAVY_SMOKE', 'LIGHT_SMOKE', 'GAS_LEAK', 'STRUCTURAL_DAMAGE', 'FLOODING', 'CONGESTION']);
+
     alerts.forEach(alert => {
+      const hazardType = (alert.emergencyType || alert.contextType || '').toUpperCase();
+      const isHazard = HAZARD_TYPES.has(hazardType);
+      
+      // Skip non-hazard SOS alerts (e.g. GENERAL, MEDICAL, THREAT) — they should NOT mark rooms as fire zones
+      if (!isHazard) return;
+
       const loc = (alert.roomNumber || "").toUpperCase();
       const directSources = [];
       
@@ -210,12 +222,18 @@ export default function HotelMapSystem({ onClose }) {
   const handleCell = useCallback((r, c) => {
     const cell = floors[selFloor][r][c];
     if (cell.type === T.ROOM) {
-      const plan = computeExitPlan(floors, cell.label, blockedSets);
+      const isWheelchair = alerts.some(a => 
+        a.vulnerabilityProfile === 'WHEELCHAIR' && (a.roomNumber === cell.label || a.roomNumber === `R${cell.label}`)
+      );
+      const plan = computeExitPlan(floors, cell.label, blockedSets, isWheelchair);
+      if (plan) {
+        plan.isWheelchairActive = isWheelchair;
+      }
       setActivePlan(plan);
       if (plan) setSelFloor(plan.roomFloor);
       setAnimStep(0);
     }
-  }, [floors, selFloor, blockedSets]);
+  }, [floors, selFloor, blockedSets, alerts]);
  
   const curGrid = floors[selFloor];
   const curBlockedSet = blockedSets[selFloor];
@@ -256,6 +274,11 @@ export default function HotelMapSystem({ onClose }) {
                   <span className="text-[8px] font-bold text-zinc-500 uppercase tracking-widest">Origin room</span>
                   <p className="text-xl font-black text-white mt-0.5">ROOM {activePlan.roomLabel}</p>
                 </div>
+                {activePlan.isWheelchairActive && (
+                  <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-blue-500/10 border border-blue-500/30 text-blue-400 text-[8px] font-black uppercase tracking-widest shadow-[0_0_10px_rgba(59,130,246,0.15)] animate-pulse">
+                    <span>♿</span> Accessible Route Active
+                  </div>
+                )}
                 <div className="p-4 bg-zinc-950/60 rounded-2xl border border-white/5">
                   <p className="text-[8px] text-zinc-500 uppercase tracking-widest">Evac Distance</p>
                   <p className="text-2xl font-black text-emerald-400 mt-1">{totalSteps} STEPS</p>
@@ -312,7 +335,12 @@ export default function HotelMapSystem({ onClose }) {
                 const isLit = isPath && pathIdx <= (animStep % (pathArr.length + 5));
                 const blockType = curBlockedSet.get(key);
                 const isBlocked = !!blockType;
-                const cs = isBlocked 
+                const isWheelchair = activePlan && activePlan.isWheelchairActive;
+                const isBlockedStair = isWheelchair && cell.type === T.STAIR;
+                
+                const cs = isBlockedStair 
+                  ? { bg: "rgba(225, 29, 72, 0.05)", border: "rgba(225, 29, 72, 0.2)", text: "#f43f5e" }
+                  : isBlocked 
                   ? { bg: "rgba(225, 29, 72, 0.15)", border: "rgba(225, 29, 72, 0.55)", text: "#f43f5e" }
                   : CSTY[cell.type];
  
@@ -320,30 +348,38 @@ export default function HotelMapSystem({ onClose }) {
                   <div 
                     key={key}
                     onClick={isBlocked ? undefined : () => handleCell(r, c)}
-                    className={`w-[54px] h-[54px] rounded-xl border flex flex-col items-center justify-center cursor-pointer transition-all duration-300 ${
+                    className={`w-[54px] h-[54px] rounded-xl border flex flex-col items-center justify-center transition-all duration-300 ${
+                      cell.type === T.ROOM ? 'cursor-pointer' : ''
+                    } ${
                       isBlocked
                         ? 'border-rose-500 bg-rose-950/20 text-rose-500 shadow-[0_0_20px_rgba(239,68,68,0.45)] scale-100 animate-pulse cursor-not-allowed'
+                        : isBlockedStair
+                        ? 'border-rose-500/50 bg-rose-950/10 text-rose-500'
+                        : isLit && isWheelchair
+                          ? 'shadow-[0_0_15px_rgba(59,130,246,0.3)] border-blue-500 bg-blue-500/25 scale-105' 
                         : isLit 
                           ? 'shadow-[0_0_15px_rgba(16,185,129,0.3)] border-emerald-500 bg-emerald-500/25 scale-105' 
-                          : 'hover:scale-[1.05] hover:border-zinc-700 hover:bg-zinc-900/40 active:scale-95'
+                          : 'hover:border-zinc-700 hover:bg-zinc-900/40'
                     }`}
                     style={{ 
-                      background: (isLit || isBlocked) ? undefined : cs.bg, 
-                      borderColor: (isLit || isBlocked) ? undefined : cs.border 
+                      background: (isLit || isBlocked || isBlockedStair) ? undefined : cs.bg, 
+                      borderColor: (isLit || isBlocked || isBlockedStair) ? undefined : cs.border 
                     }}
                   >
                     {isBlocked ? (
                       <span className="text-lg animate-bounce">
                         {blockType === "SOURCE" ? "🔥" : "⚠️"}
                       </span>
+                    ) : isBlockedStair ? (
+                      <span className="text-lg font-black animate-pulse">❌</span>
                     ) : (
                       <>
                         {cell.type === T.ROOM && <span className="text-[10px] font-black text-white">{cell.label}</span>}
                         {cell.type === T.EXIT && <span className="text-lg">🚪</span>}
                         {cell.type === T.STAIR && <span className="text-lg">🪜</span>}
                         {cell.type === T.ELEVATOR && <span className="text-lg">🛗</span>}
-                        {isPath && !isLit && <div className="w-1.5 h-1.5 rounded-full bg-emerald-950"></div>}
-                        {isLit && <div className="w-2.5 h-2.5 rounded-full bg-emerald-400 shadow-[0_0_10px_#10b981]"></div>}
+                        {isPath && !isLit && <div className={`w-1.5 h-1.5 rounded-full ${isWheelchair ? 'bg-blue-950' : 'bg-emerald-950'}`}></div>}
+                        {isLit && <div className={`w-2.5 h-2.5 rounded-full shadow-lg ${isWheelchair ? 'bg-blue-400 shadow-blue-500' : 'bg-emerald-400 shadow-emerald-500'}`}></div>}
                       </>
                     )}
                   </div>

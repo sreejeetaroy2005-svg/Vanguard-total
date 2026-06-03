@@ -13,6 +13,7 @@ import {
 import { pathfinder } from './utils/pathfinder'
 import { acknowledgeAlert, resolveAlert, sendSignal, baseURL, sendAlert, escalateAlert } from './api'
 import { tars } from './utils/tars'
+import HotelMapSystem from './HotelMap'
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -39,6 +40,12 @@ const Dashboard = () => {
   const [tarsLevel, setTarsLevel] = useState(null);
   const [isCriticalOverlay, setIsCriticalOverlay] = useState(false);
   
+  // Fire Simulation States
+  const [fireSimLoading, setFireSimLoading] = useState(false);
+  const [toastMessage, setToastMessage] = useState(null);
+  const [lastRerouteMs, setLastRerouteMs] = useState(null);
+  const [showMap, setShowMap] = useState(false);
+  
   // WebRTC Refs
   const pcRef = useRef(null);
   const remoteStreamRef = useRef(new MediaStream());
@@ -59,6 +66,11 @@ const Dashboard = () => {
       const alertData = JSON.parse(e.data);
       setIncomingSOS(alertData);
       setShowSOSPopup(true);
+      
+      // Live reroute timing from SSE
+      if (alertData.rerouteMs !== undefined && alertData.rerouteMs !== null) {
+        setLastRerouteMs(alertData.rerouteMs);
+      }
 
       // TARS: Intelligent threat classification + adaptive audio response
       const level = triggerAlertSound(alertData);
@@ -345,6 +357,27 @@ const Dashboard = () => {
     }
   };
 
+  const simulateFireEndpoint = async () => {
+    setFireSimLoading(true);
+    try {
+      const response = await fetch(`http://localhost:8080/api/alerts/path?roomId=R301&hazardId=H_NORTH`);
+      if (!response.ok) throw new Error('Failed to trigger');
+      
+      const data = await response.json();
+      if (data.heading !== undefined) setHeading(data.heading);
+      if (data.nextWaypoint) setNextWaypoint(data.nextWaypoint);
+      if (data.reroute_ms !== undefined) setLastRerouteMs(data.reroute_ms);
+      
+      setToastMessage({ type: 'success', text: '🔥 Fire Simulated — Guests Rerouting...' });
+      setTimeout(() => setToastMessage(null), 4000);
+    } catch (e) {
+      setToastMessage({ type: 'error', text: '⚠️ Trigger failed — check backend connection' });
+      setTimeout(() => setToastMessage(null), 4000);
+    } finally {
+      setFireSimLoading(false);
+    }
+  };
+
   const handleBroadcast = async () => {
     if (!broadcastText.trim()) return;
     try {
@@ -439,6 +472,18 @@ const Dashboard = () => {
  
       <audio ref={audioRef} autoPlay />
 
+      {toastMessage && (
+        <div className={`fixed top-24 left-1/2 -translate-x-1/2 z-[100] px-6 py-3 rounded-xl border backdrop-blur-md shadow-[0_0_30px_rgba(239,68,68,0.3)] transition-all duration-300 animate-fadeIn ${
+          toastMessage.type === 'success' 
+            ? 'bg-rose-950/90 border-rose-500/60 text-rose-400' 
+            : 'bg-zinc-950/90 border-amber-500/60 text-amber-400'
+        }`}>
+          <p className="font-mono text-[10px] font-black uppercase tracking-widest flex items-center gap-2">
+            {toastMessage.text}
+          </p>
+        </div>
+      )}
+
       {/* TARS: Critical Threat Screen Overlay */}
       {isCriticalOverlay && (
         <div className="fixed inset-0 z-[45] pointer-events-none critical-screen-overlay">
@@ -470,6 +515,21 @@ const Dashboard = () => {
           <span className="hidden sm:inline rounded-full bg-zinc-900 border border-white/5 px-3 py-1.5 font-mono text-[9px] font-extrabold tracking-widest text-zinc-400">
             SECURE LINK // {hotelId.toUpperCase()}
           </span>
+          <button
+            onClick={simulateFireEndpoint}
+            disabled={fireSimLoading}
+            className={`flex items-center gap-2 rounded-xl border border-rose-500/40 bg-rose-500/10 px-4 py-2 font-display text-[9px] font-bold tracking-widest uppercase transition-all shadow-[0_0_12px_rgba(239,68,68,0.15)] ${
+              fireSimLoading ? 'opacity-50 cursor-not-allowed text-rose-300' : 'text-rose-400 hover:bg-rose-600 hover:text-white hover:border-rose-600 cursor-pointer'
+            }`}
+          >
+            {fireSimLoading ? 'TRIGGERING...' : '🔥 SIMULATE FIRE'}
+          </button>
+          <button
+            onClick={() => setShowMap(true)}
+            className="flex items-center gap-2 rounded-xl border border-blue-500/40 bg-blue-500/10 px-4 py-2 font-display text-[9px] font-bold tracking-widest uppercase text-blue-400 hover:bg-blue-600 hover:text-white hover:border-blue-600 cursor-pointer transition-all shadow-[0_0_12px_rgba(59,130,246,0.15)]"
+          >
+            🗺️ EVAC MAP
+          </button>
           {/* DEMO: Simulate CCTV Threat Button */}
           <button
             onClick={simulateCCTVThreat}
@@ -489,6 +549,13 @@ const Dashboard = () => {
           </button>
         </div>
       </header>
+
+      {/* EVAC MAP MODAL */}
+      {showMap && (
+        <div className="fixed inset-0 z-[2000] overflow-hidden bg-black animate-fadeIn">
+          <HotelMapSystem onClose={() => setShowMap(false)} />
+        </div>
+      )}
 
       {/* CRISIS LOCKDOWN STATUS BAR */}
       {isCrisisLockdown && (
@@ -750,6 +817,23 @@ const Dashboard = () => {
                    <p className="font-mono text-[9px] text-zinc-500 font-bold uppercase tracking-widest">
                      Heading Vector: {heading?.toFixed(1)}° // Sector Safe
                    </p>
+                   {/* Live Reroute Speed Badge */}
+                   <div className={`mt-3 inline-flex items-center gap-1.5 px-3 py-1 rounded-full border text-[8px] font-black uppercase tracking-widest transition-all duration-500 ${
+                     lastRerouteMs === null
+                       ? 'bg-zinc-900/80 border-zinc-700/50 text-zinc-500'
+                       : lastRerouteMs > 500
+                       ? 'bg-rose-950/80 border-rose-500/50 text-rose-400 animate-pulse shadow-[0_0_10px_rgba(239,68,68,0.2)]'
+                       : lastRerouteMs > 100
+                       ? 'bg-amber-950/80 border-amber-500/50 text-amber-400 shadow-[0_0_10px_rgba(245,158,11,0.15)]'
+                       : 'bg-emerald-950/80 border-emerald-500/50 text-emerald-400 shadow-[0_0_10px_rgba(16,185,129,0.15)]'
+                   }`}>
+                     <span className={`h-1.5 w-1.5 rounded-full ${
+                       lastRerouteMs === null ? 'bg-zinc-600' :
+                       lastRerouteMs > 500 ? 'bg-rose-500 animate-ping' :
+                       lastRerouteMs > 100 ? 'bg-amber-400' : 'bg-emerald-400'
+                     }`} />
+                     {lastRerouteMs === null ? 'SafePath: Standby' : `Last Reroute: ${lastRerouteMs}ms ⚡`}
+                   </div>
                 </div>
               </div>
             </div>

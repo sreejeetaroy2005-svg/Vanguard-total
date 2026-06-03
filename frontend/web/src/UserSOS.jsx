@@ -2,8 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { getMyLatestAlert, getSafeHeading, logout, sendAlert, sendSignal } from './api';
 import HotelMapSystem from './HotelMap';
-import { db } from './firebase';
-import { collection, addDoc, updateDoc, doc, onSnapshot, query, orderBy, limit } from 'firebase/firestore';
+import { db, auth } from './firebase';
+import { collection, addDoc, updateDoc, doc, onSnapshot, query, orderBy, limit, getDoc } from 'firebase/firestore';
 
 function UserSOS() {
   const navigate = useNavigate()
@@ -12,7 +12,9 @@ function UserSOS() {
   const [error, setError] = useState('')
   const [sosMessage, setSosMessage] = useState('')
   const [contextType, setContextType] = useState('GENERAL')
-  const [vulnerability, setVulnerability] = useState('NONE')
+  const [isMobilityImpaired, setIsMobilityImpaired] = useState(false)
+  const [roomNumber, setRoomNumber] = useState(localStorage.getItem('roomNumber') || '')
+  const [editingRoom, setEditingRoom] = useState(false)
   const [isLanActive, setIsLanActive] = useState(true)
   const [broadcastMsg, setBroadcastMsg] = useState('')
   const [latestStatus, setLatestStatus] = useState('')
@@ -33,13 +35,44 @@ function UserSOS() {
 
   const fetchPathData = async () => {
     try {
-      const hData = await getSafeHeading('R301', null, vulnerability);
-      setHeading(hData.data.heading);
-      setNextWaypoint(hData.data.nextWaypoint);
-      setEstimatedTime(hData.data.estimatedTimeSeconds);
+      const storedRoom = roomNumber || localStorage.getItem('roomNumber') || '301';
+      const formattedRoom = storedRoom.startsWith('R') ? storedRoom : `R${storedRoom}`;
+      const response = await fetch(`http://${window.location.hostname}:8080/api/alerts/route`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          guestId: localStorage.getItem('userId') || 'GUEST',
+          currentNode: formattedRoom,
+          mobilityImpaired: isMobilityImpaired
+        })
+      });
+      const data = await response.json();
       
-      if (vulnerability === 'VISION' && nextWaypoint) {
-        speakInstruction(`Warning. Proceed towards ${nextWaypoint}. Time to safety is ${Math.floor(hData.data.estimatedTimeSeconds / 60)} minutes.`);
+      if (data.status === 'no_accessible_route') {
+        setError('⚠️ No accessible path found — Staff assistance dispatched');
+        // Let staff know immediately
+        const payload = {
+          uniqueId: "SOS-" + Date.now().toString(),
+          timestamp: Date.now(),
+          timeToLive: 600000,
+          status: "PENDING",
+          priority: "CRITICAL",
+          userId: localStorage.getItem('userId') || 'GUEST',
+          roomNumber: (roomNumber || '301').startsWith('R') ? (roomNumber || '301') : `R${roomNumber || '301'}`,
+          emergencyType: 'MEDICAL',
+          message: '⚠️ WHEELCHAIR GUEST TRAPPED - NO ACCESSIBLE ROUTE',
+          vulnerabilityProfile: 'WHEELCHAIR',
+        };
+        sendAlert(payload);
+        return;
+      }
+
+      setHeading(data.heading);
+      setNextWaypoint(data.nextWaypoint);
+      setEstimatedTime(data.estimatedTimeSeconds);
+      
+      if (isMobilityImpaired && data.nextWaypoint) {
+        speakInstruction(`Warning. Proceed towards ${data.nextWaypoint}. Time to safety is ${Math.floor(data.estimatedTimeSeconds / 60)} minutes.`);
       }
     } catch { }
   }
@@ -79,6 +112,25 @@ function UserSOS() {
     return () => eventSource.close();
   }, []);
 
+  // Load room number from Firestore if missing from localStorage
+  useEffect(() => {
+    const loadRoomFromFirestore = async () => {
+      const email = auth.currentUser?.email || localStorage.getItem('userId');
+      if (!email) return;
+      if (localStorage.getItem('roomNumber')) return; // already set
+      try {
+        const snap = await getDoc(doc(db, 'customers', email));
+        if (snap.exists()) {
+          const data = snap.data();
+          const room = data.roomNumber || '301';
+          localStorage.setItem('roomNumber', room);
+          setRoomNumber(room);
+        }
+      } catch { }
+    };
+    loadRoomFromFirestore();
+  }, []);
+
   useEffect(() => {
     const loadLatestStatus = async () => {
       try {
@@ -105,7 +157,7 @@ function UserSOS() {
       if (isEmergencyActive) fetchPathData();
     }, 5000);
   return () => clearInterval(timer);
-  }, [isEmergencyActive])
+  }, [isEmergencyActive, isMobilityImpaired])
 
   const startVoiceComms = async () => {
     try {
@@ -146,11 +198,11 @@ function UserSOS() {
         status: "PENDING",
         priority: contextType === 'THREAT' ? 'CRITICAL' : 'MEDIUM',
         userId: stableId,
-        roomNumber: 'R301',
+        roomNumber: (roomNumber || '301').startsWith('R') ? (roomNumber || '301') : `R${roomNumber || '301'}`,
         floor: '3rd Floor',
         emergencyType: contextType,
-        message: sosMessage || `EMERGENCY: ${contextType} situation at Room R301.`,
-        vulnerabilityProfile: vulnerability,
+        message: sosMessage || `EMERGENCY: ${contextType} situation at Room ${roomNumber || '301'}.`,
+        vulnerabilityProfile: isMobilityImpaired ? 'WHEELCHAIR' : 'NONE',
         hotelId: localStorage.getItem('hotelId') || 'GLOBAL',
       }
       
@@ -213,6 +265,20 @@ function UserSOS() {
               <span className={`h-1.5 w-1.5 rounded-full ${isLanActive ? 'bg-emerald-500 animate-pulse shadow-[0_0_8px_#10b981]' : 'bg-rose-600 shadow-[0_0_8px_#e11d48]'}`}></span>
               <span className="font-mono text-[8px] font-black tracking-widest text-zinc-500 uppercase">{isLanActive ? 'Mesh Link: Secured' : 'Mesh: Disconnected'}</span>
             </div>
+            {/* Editable Room Number */}
+            {editingRoom ? (
+              <form onSubmit={(e) => { e.preventDefault(); const val = e.target.room.value.trim(); if(val) { setRoomNumber(val); localStorage.setItem('roomNumber', val); } setEditingRoom(false); }} className="flex items-center gap-1 mt-1.5">
+                <input name="room" defaultValue={roomNumber} autoFocus className="w-16 bg-zinc-900 border border-sky-500/50 rounded-md px-2 py-0.5 text-[9px] font-black text-sky-400 outline-none" />
+                <button type="submit" className="text-[8px] font-black text-sky-400 uppercase tracking-widest cursor-pointer">SAVE</button>
+              </form>
+            ) : (
+              <button onClick={() => setEditingRoom(true)} className="flex items-center gap-1 mt-1.5 cursor-pointer group">
+                <span className="font-mono text-[9px] font-black text-sky-400 uppercase tracking-widest group-hover:text-sky-300">
+                  RM {roomNumber || '?'}
+                </span>
+                <span className="font-mono text-[7px] text-zinc-600 group-hover:text-zinc-400">✎ edit</span>
+              </button>
+            )}
           </div>
           <div className="text-right flex flex-col items-end gap-1.5">
             <span className="font-mono text-base font-bold text-zinc-500 leading-none">{clock}</span>
@@ -306,21 +372,18 @@ function UserSOS() {
                 <div className="absolute right-4 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none text-[8px]">▼</div>
               </div>
             </div>
-            <div className="flex flex-col gap-1">
-              <span className="font-mono text-[8px] font-bold text-zinc-500 ml-1.5 uppercase tracking-widest">Accessibility profile</span>
-              <div className="relative">
-                <select 
-                  value={vulnerability} 
-                  onChange={(e) => setVulnerability(e.target.value)} 
-                  className="w-full bg-zinc-950/60 border border-white/10 rounded-2xl px-4 py-3.5 text-xs font-black outline-none focus:border-rose-500/55 text-white appearance-none cursor-pointer"
-                >
-                  <option value="NONE">STANDARD Evacuation</option>
-                  <option value="WHEELCHAIR">WHEELCHAIR access</option>
-                  <option value="VISION">VISION assistance</option>
-                  <option value="HEARING">HAPTIC/Text alerts</option>
-                </select>
-                <div className="absolute right-4 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none text-[8px]">▼</div>
-              </div>
+            <div className="flex flex-col gap-1 justify-center px-2">
+              <label className="flex items-center gap-3 cursor-pointer p-3 bg-zinc-950/60 border border-white/10 rounded-2xl transition hover:border-sky-500/50">
+                <input 
+                  type="checkbox" 
+                  className="w-5 h-5 accent-sky-500 rounded bg-zinc-950 border-white/10 cursor-pointer"
+                  checked={isMobilityImpaired}
+                  onChange={(e) => setIsMobilityImpaired(e.target.checked)}
+                />
+                <span className={`font-mono text-[10px] font-black uppercase tracking-widest ${isMobilityImpaired ? 'text-sky-400' : 'text-zinc-400'}`}>
+                  ♿ I need an accessible route
+                </span>
+              </label>
             </div>
           </div>
 

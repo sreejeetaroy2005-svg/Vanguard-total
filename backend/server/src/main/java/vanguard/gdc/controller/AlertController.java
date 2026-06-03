@@ -5,6 +5,8 @@ import org.springframework.web.bind.annotation.*;
 import vanguard.gdc.model.EmergencyPacketDto;
 import vanguard.EvacuationPathfinder;
 import vanguard.gdc.service.SmsService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -23,6 +25,7 @@ import org.json.JSONArray;
 @CrossOrigin(origins = "*", allowedHeaders = "*", methods = {RequestMethod.GET, RequestMethod.POST, RequestMethod.PUT, RequestMethod.DELETE, RequestMethod.OPTIONS}, exposedHeaders = "*")
 public class AlertController {
     
+    private static final Logger logger = LoggerFactory.getLogger(AlertController.class);
     private final EvacuationPathfinder pathfinder = new EvacuationPathfinder();
     private final Map<String, EmergencyPacketDto> activeAlerts = new ConcurrentHashMap<>();
     private final Map<String, List<SseEmitter>> hotelEmitters = new ConcurrentHashMap<>();
@@ -73,7 +76,13 @@ public class AlertController {
         refreshHazards();
 
         // SafePath Integration: Attach evacuation route to packet AFTER hazard weights are updated
+        long start = System.currentTimeMillis();
         List<EvacuationPathfinder.Node> path = pathfinder.findSafePath(packet.getRoomNumber() != null ? packet.getRoomNumber() : "R301", packet.getVulnerabilityProfile());
+        long end = System.currentTimeMillis();
+        long duration = end - start;
+        logger.info("SafePath reroute completed in {}ms for guest {}", duration, packet.getUserId());
+        packet.setRerouteMs(duration);
+        
         if (!path.isEmpty()) {
             String route = path.stream().map(n -> n.label).reduce((a, b) -> a + " -> " + b).orElse("STAY IN PLACE");
             packet.setEvacuationRoute(route);
@@ -250,8 +259,17 @@ public class AlertController {
             @RequestParam(required = false) String vulnerability) {
         refreshHazards();
         if (hazardId != null && !hazardId.isBlank()) pathfinder.markHazard(hazardId);
+        
+        long start = System.currentTimeMillis();
         List<EvacuationPathfinder.Node> path = pathfinder.findSafePath(roomId, vulnerability);
+        long end = System.currentTimeMillis();
+        long duration = end - start;
+        logger.info("SafePath reroute completed in {}ms for guest {}", duration, "Manual Simulation");
+        
         Map<String, Object> response = new HashMap<>();
+        response.put("reroute_ms", duration);
+        response.put("status", "success");
+        
         if (path.size() >= 2) {
             EvacuationPathfinder.Node from = path.get(0);
             EvacuationPathfinder.Node to = path.get(1);
@@ -263,6 +281,42 @@ public class AlertController {
             response.put("heading", 0);
             response.put("nextWaypoint", "STAY IN PLACE");
             response.put("estimatedTimeSeconds", 0);
+        }
+        return ResponseEntity.ok(response);
+    }
+
+    @PostMapping("/route")
+    public ResponseEntity<Map<String, Object>> getSafeRoute(@RequestBody Map<String, Object> request) {
+        refreshHazards();
+        String roomId = (String) request.get("currentNode");
+        String guestId = (String) request.get("guestId");
+        Boolean mobilityImpaired = request.get("mobilityImpaired") instanceof Boolean ? (Boolean) request.get("mobilityImpaired") : false;
+
+        long start = System.currentTimeMillis();
+        List<EvacuationPathfinder.Node> path = pathfinder.findSafePath(roomId, "NONE", mobilityImpaired);
+        long end = System.currentTimeMillis();
+        long duration = end - start;
+        logger.info("SafePath reroute completed in {}ms for guest {}", duration, guestId);
+
+        Map<String, Object> response = new HashMap<>();
+        response.put("reroute_ms", duration);
+
+        if (path.isEmpty()) {
+            response.put("status", "no_accessible_route");
+            response.put("message", "Staff assistance required");
+        } else {
+            response.put("status", "success");
+            List<String> pathLabels = path.stream().map(n -> n.label).collect(Collectors.toList());
+            response.put("path", pathLabels);
+            
+            if (path.size() >= 2) {
+                EvacuationPathfinder.Node from = path.get(0);
+                EvacuationPathfinder.Node to = path.get(1);
+                float heading = (float) Math.toDegrees(Math.atan2(to.x - from.x, to.y - from.y));
+                response.put("heading", heading);
+                response.put("nextWaypoint", to.label);
+                response.put("estimatedTimeSeconds", pathfinder.getEstimatedTime(path, "NONE"));
+            }
         }
         return ResponseEntity.ok(response);
     }

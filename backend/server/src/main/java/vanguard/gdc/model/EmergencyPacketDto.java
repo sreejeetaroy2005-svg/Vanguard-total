@@ -25,6 +25,7 @@ public class EmergencyPacketDto {
     private String hazardLevel;
     private String evacuationRoute;
     private String aiThreatSeverity;
+    private Long rerouteMs;
 
     // Standard Getters and Setters for Spring JSON mapping
     public String getUniqueId() { return uniqueId; }
@@ -71,6 +72,9 @@ public class EmergencyPacketDto {
 
     public String getAiThreatSeverity() { return aiThreatSeverity; }
     public void setAiThreatSeverity(String aiThreatSeverity) { this.aiThreatSeverity = aiThreatSeverity; }
+
+    public Long getRerouteMs() { return rerouteMs; }
+    public void setRerouteMs(Long rerouteMs) { this.rerouteMs = rerouteMs; }
 
     public List<String> getHopHistory() { return hopHistory; }
     public void setHopHistory(List<String> hopHistory) { this.hopHistory = hopHistory; }

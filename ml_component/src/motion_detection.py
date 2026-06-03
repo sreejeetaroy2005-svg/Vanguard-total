@@ -2,7 +2,8 @@ import cv2
 import numpy as np
 import requests
 import time
-from flask import Flask, Response, send_file
+from flask import Flask, Response, send_file, request
+import json as _json
 from ultralytics import YOLO
 import os
 import threading
@@ -195,6 +196,55 @@ def gen_frames():
 @app.route('/video_feed')
 def video_feed():
     return Response(gen_frames(), mimetype='multipart/x-mixed-replace; boundary=frame')
+
+@app.after_request
+def add_headers(response):
+    response.headers['ngrok-skip-browser-warning'] = 'true'
+    response.headers['Access-Control-Allow-Origin'] = '*'
+    response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
+    response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
+    return response
+
+# ── Reverse Proxy: forward /api/* → Java Spring Boot backend on :8080 ──────────
+# This lets the single ngrok tunnel serve BOTH the video feed AND the backend API.
+JAVA_BACKEND = 'http://localhost:8080'
+
+@app.route('/api/', defaults={'path': ''}, methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'])
+@app.route('/api/<path:path>', methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'])
+def proxy_api(path):
+    if request.method == 'OPTIONS':
+        return Response(status=200)
+    target_url = f'{JAVA_BACKEND}/api/{path}'
+    if request.query_string:
+        target_url += f'?{request.query_string.decode()}'
+    try:
+        # Forward the request to Java backend
+        headers = {k: v for k, v in request.headers if k.lower() not in ('host', 'content-length')}
+        resp = requests.request(
+            method=request.method,
+            url=target_url,
+            headers=headers,
+            data=request.get_data(),
+            stream=True,
+            timeout=30
+        )
+        # Stream SSE responses (for /api/alerts/stream)
+        if 'text/event-stream' in resp.headers.get('Content-Type', ''):
+            def stream_events():
+                for chunk in resp.iter_content(chunk_size=None):
+                    yield chunk
+            return Response(stream_events(), content_type='text/event-stream')
+        return Response(
+            resp.content,
+            status=resp.status_code,
+            content_type=resp.headers.get('Content-Type', 'application/json')
+        )
+    except requests.exceptions.ConnectionError:
+        return Response(
+            _json.dumps({'error': 'Backend server not reachable. Is the Java server running on :8080?'}),
+            status=503,
+            content_type='application/json'
+        )
 
 @app.route('/snapshot')
 def snapshot():

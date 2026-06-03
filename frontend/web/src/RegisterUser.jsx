@@ -37,6 +37,8 @@ function RegisterUser() {
         localStorage.setItem('token', user.accessToken);
         localStorage.setItem('role', 'GUEST');
         localStorage.setItem('hotelId', formData.hotelId);
+        localStorage.setItem('roomNumber', formData.roomNumber || 'R301');
+        localStorage.setItem('userId', formData.email);
         
         await setDoc(doc(db, "customers", formData.email), {
           name: formData.name,
@@ -61,6 +63,9 @@ function RegisterUser() {
           password: formData.password, // Added for demo visibility in Firebase
           status: 'ACTIVE'
         });
+
+        localStorage.setItem('roomNumber', formData.roomNumber || 'R301');
+        localStorage.setItem('userId', formData.email);
 
         setIsLogin(true);
         alert('Tactical ID Created. Please authorize to enter.');
