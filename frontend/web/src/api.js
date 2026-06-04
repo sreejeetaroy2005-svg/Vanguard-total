@@ -17,13 +17,10 @@ API.interceptors.request.use((req) => {
 
 export const sendAlert = (data) => API.post('/alerts', data);
 export const getAlerts = (hotelId) => API.get('/alerts/active', { params: { hotelId } });
-export const getAlertHistory = (hotelId) => API.get('/alerts/history', { params: { hotelId } });
 export const getMyLatestAlert = (userId) => API.get('/alerts/latest', { params: { userId } });
 export const acknowledgeAlert = (id) => API.post(`/alerts/${id}/acknowledge`);
-export const dispatchAlert = (id) => API.post(`/alerts/${id}/dispatch`);
 export const resolveAlert = (id) => API.post(`/alerts/${id}/resolve`);
 export const escalateAlert = (id, params) => API.post(`/alerts/${id}/escalate`, params);
-export const broadcastMessage = (hotelId, message) => API.post('/alerts/broadcast', { hotelId, message });
 export const registerGuest = (data) => API.post('/users/register', data);
 export const loginGuest = (data) => API.post('/users/login', data);
 export const logout = () => API.post('/users/logout');

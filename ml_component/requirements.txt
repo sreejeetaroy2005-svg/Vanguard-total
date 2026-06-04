@@ -3,3 +3,6 @@ numpy
 requests
 flask
 ultralytics
+twilio
+google-generativeai
+python-dotenv

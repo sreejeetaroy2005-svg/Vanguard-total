@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { getMyLatestAlert, getSafeHeading, logout, sendAlert, sendSignal } from './api';
+import { getMyLatestAlert, getSafeHeading, logout, sendAlert, sendSignal, baseURL } from './api';
 import HotelMapSystem from './HotelMap';
 import { db, auth } from './firebase';
 import { collection, addDoc, updateDoc, doc, onSnapshot, query, orderBy, limit, getDoc } from 'firebase/firestore';
@@ -37,7 +37,7 @@ function UserSOS() {
     try {
       const storedRoom = roomNumber || localStorage.getItem('roomNumber') || '301';
       const formattedRoom = storedRoom.startsWith('R') ? storedRoom : `R${storedRoom}`;
-      const response = await fetch(`http://${window.location.hostname}:8080/api/alerts/route`, {
+      const response = await fetch(`${baseURL}/alerts/route`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -249,7 +249,7 @@ function UserSOS() {
 
       {showMap && (
         <div className="fixed inset-0 z-[200] overflow-hidden bg-black animate-fadeIn">
-          <HotelMapSystem onClose={() => setShowMap(false)} />
+          <HotelMapSystem onClose={() => setShowMap(false)} isMobilityImpaired={isMobilityImpaired} />
         </div>
       )}
 
