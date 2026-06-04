@@ -248,28 +248,34 @@ const Dashboard = () => {
       const filtered = alertList.filter(a => a.hotelId === hotelId || a.hotelId === 'GLOBAL')
       setAlerts(filtered)
       setLoading(false)
+
+      // Update the local JS Dijkstra pathfinder with active hazards from Firestore
       pathfinder.clearHazards()
+      const HAZARD_ALERT_TYPES = new Set(['FIRE', 'HEAVY_SMOKE', 'LIGHT_SMOKE', 'GAS_LEAK', 'STRUCTURAL_DAMAGE', 'FLOODING', 'CONGESTION'])
       filtered.forEach(a => {
-        if (a.status !== 'RESOLVED') {
+        if (a.status === 'RESOLVED') return;
+        const location = (a.roomNumber || '').toUpperCase();
+        // Only mark corridor/hallway/exit nodes as hazards — not room numbers (R...)
+        if (location.startsWith('R') && !location.startsWith('RAMP')) return;
+        
+        // Use emergencyType field directly if it is a recognised hazard type
+        let dangerType = null;
+        const et = (a.emergencyType || a.contextType || '').toUpperCase();
+        if (HAZARD_ALERT_TYPES.has(et)) {
+          dangerType = et;
+        } else {
+          // Fall back to message keyword parsing
           const msg = (a.message || '').toUpperCase();
-          const priority = (a.priority || '').toUpperCase();
-          let dangerType = "FIRE";
-          if (msg.includes("LIGHT SMOKE")) {
-            dangerType = "LIGHT_SMOKE";
-          } else if (msg.includes("HEAVY SMOKE") || msg.includes("SMOKE")) {
-            dangerType = "HEAVY_SMOKE";
-          } else if (msg.includes("CONGESTION") || msg.includes("CROWD") || msg.includes("PANIC")) {
-            dangerType = "CONGESTION";
-          } else if (msg.includes("GAS")) {
-            dangerType = "GAS_LEAK";
-          } else if (msg.includes("STRUCTURAL") || msg.includes("DAMAGE") || msg.includes("COLLAPSE") || msg.includes("VIBRATION")) {
-            dangerType = "STRUCTURAL_DAMAGE";
-          } else if (msg.includes("FLOOD") || msg.includes("WATER") || msg.includes("BURST")) {
-            dangerType = "FLOODING";
-          } else if (priority.includes("FIRE") || priority.includes("CRITICAL")) {
-            dangerType = "FIRE";
-          }
-          pathfinder.markHazard(a.roomNumber, dangerType);
+          if (msg.includes('LIGHT SMOKE')) dangerType = 'LIGHT_SMOKE';
+          else if (msg.includes('HEAVY SMOKE') || msg.includes('SMOKE')) dangerType = 'HEAVY_SMOKE';
+          else if (msg.includes('CONGESTION') || msg.includes('CROWD') || msg.includes('PANIC')) dangerType = 'CONGESTION';
+          else if (msg.includes('GAS')) dangerType = 'GAS_LEAK';
+          else if (msg.includes('STRUCTURAL') || msg.includes('DAMAGE') || msg.includes('COLLAPSE') || msg.includes('VIBRATION')) dangerType = 'STRUCTURAL_DAMAGE';
+          else if (msg.includes('FLOOD') || msg.includes('WATER') || msg.includes('BURST')) dangerType = 'FLOODING';
+          else if (msg.includes('FIRE')) dangerType = 'FIRE';
+        }
+        if (dangerType) {
+          pathfinder.markHazard(location, dangerType);
         }
       })
       calculateLocalPath()
@@ -323,7 +329,7 @@ const Dashboard = () => {
 
   const triggerSimulation = async (room, dangerType, msg) => {
     try {
-      await sendAlert({
+      const payload = {
         uniqueId: `SIM-DIJKSTRA-${Date.now()}`,
         timestamp: Date.now(),
         timeToLive: 600000,
@@ -332,10 +338,15 @@ const Dashboard = () => {
         userId: 'SIM-RADAR-01',
         hotelId: hotelId,
         message: `${msg} (${dangerType})`,
-        contextType: 'THREAT',
+        emergencyType: dangerType,
+        contextType: dangerType,
         roomNumber: room,
         floor: '3rd Floor',
-      });
+      };
+      // Write to Firestore first — the snapshot listener updates the pathfinder map instantly
+      await addDoc(collection(db, 'alerts'), payload);
+      // Also post to Java REST backend for SSE broadcast
+      sendAlert(payload).catch(() => {});
     } catch (e) {
       console.error('Trigger simulation failed:', e);
     }
@@ -345,7 +356,9 @@ const Dashboard = () => {
     try {
       for (const a of alerts) {
         if (a.status !== 'RESOLVED') {
-          await resolveAlert(a.uniqueId || a.id);
+          try {
+            await resolveAlert(a.uniqueId || a.id);
+          } catch (err) {}
           if (a.id) {
             const alertRef = doc(db, 'alerts', a.id);
             await updateDoc(alertRef, { status: 'RESOLVED' });

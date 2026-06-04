@@ -1,114 +1,130 @@
-# 🛡️ Vanguard-Total: Hospitality Crisis Intelligence
+# Vanguard‑Total
 
-**Vanguard-Total** is a high-level emergency response platform designed specifically for the hospitality sector. It combines **Edge AI**, **P2P Mesh Networking**, and **Generative AI (Gemini 2.5 Flash)** to protect guests and staff when traditional infrastructure fails.
-
----
-
-### 🎨 Premium Tactical Interface
-Vanguard features a custom-built **Tactical HUD Design System** (v2.5) optimized for high-stress emergency environments:
-- **Glassmorphic Command Center**: Ultra-dark, high-contrast interface with glowing status indicators.
-- **Incident Pulse**: Visual heartbeats for critical threats (Fire, Intruders) to ensure immediate staff attention.
-- **Biometric UI**: Handheld Guest SOS interface with integrated AR guidance and AI companion.
+**Real‑time emergency routing for hotels** – a full‑stack demo built with Java 21, Spring Boot, React, and Google Gemini 2.5 Flash.  The system ingests emergency alerts, updates a hazard‑aware Dijkstra graph, and instantly re‑routes guests on a tactical map.
 
 ---
 
-### 🧠 Core Intelligence Pillars
+## 🎯 Project Goal (Hackathon Pitch)
+Provide a **live‑visual evacuation assistant** that:
+- Receives alerts (fire, smoke, congestion, etc.) from IoT devices, CCTV AI, or manual SOS.
+- Propagates them through Firestore for **instant UI updates**.
+- Reroutes guests to the safest exit in **sub‑second latency**.
+- Supports **wheelchair/mobility‑impaired routing**.
+- Guarantees **deduplication** via unique `EmergencyPacketDto.uniqueId` and a **TTL** (`timeToLive`).
+- Demonstrates a sleek dark UI with glass‑morphism and animated radar.
 
-#### 1. Hazard-Aware Pathfinder (Dijkstra+ Logic)
-Vanguard doesn't just find the "shortest" path; it finds the **safest** path.
-- **Dynamic Rerouting**: If a fire is detected in a hallway by our CCTV module, the system instantly recalculates and redirects guests via AR arrows.
-- **Indoor Node Mapping**: A specialized graph of hotel floors ensuring guests who don't know the layout are never lost.
-
-#### 2. Hybrid AI Brain: Gemini 2.5 + Local Gemma
-Built for **Mission-Critical Resilience**, Vanguard uses a dual-layer AI strategy:
-- **Cloud Intelligence (Gemini 2.5 Flash)**: High-speed triage and translation via the Google AI Studio SDK.
-- **Edge Continuity (Local Gemma 2B)**: If the internet fails, Vanguard automatically failover to a locally-hosted **Gemma** model running on the building's edge server. 
-- **100% Free**: Both layers utilize Google's free-tier and open-weight ecosystems, making Vanguard cost-effective for large-scale deployment.
-
-#### 3. ML CCTV Threat Detection
-- **Computer Vision at the Edge**: Locally running YOLOv8 models detect weapons, physical altercations, and crowd density.
-- **Automated Alerts**: Direct integration with the Java GDC backend—no manual reporting needed.
+Perfect for a 5‑minute demo‑roll that showcases AI‑driven safety, real‑time sync, and robust backend architecture.
 
 ---
 
-### 📡 Technical Stack
-
-- **Intelligence**: Gemini 2.5 Flash (Free Tier), YOLOv8, Flask
-- **Backend**: Java 21 (Spring Boot), Maven
-- **Frontend**: React + Tailwind 4 (Tactical HUD System)
-- **Mobile**: Android (Nearby API)
-- **Communications**: P2P Mesh Simulation, SSE (Server-Sent Events)
-- **Data**: Firebase / Firestore
-
----
-
-### 🚨 Key Engineering Rules
-
-- **Emergency Packets:** All emergency packets must have a TTL (Time-to-Live) and a unique ID for deduplication.
+## ✨ Key Features Added
+| Feature | Description |
+|---|---|
+| **Emergency Packet TTL & Unique ID** | Every `EmergencyPacketDto` now carries a `timeToLive` (ms) and a UUID for deduplication (see `model/EmergencyPacketDto.java`). |
+| **Hazard‑Aware Graph** | `EvacuationPathfinder` marks corridors (`H_NORTH`, `H_SOUTH`, …) with weighted hazards; rooms (`R…`) are ignored for routing. |
+| **Dynamic Firestore Subscription** | `Dashboard.jsx` clears previous hazards on each snapshot, computes `dangerType` from the `emergencyType` field (fallback to keyword parsing), and calls `pathfinder.markHazard`. |
+| **Reroute Logic** | Shortest safe path is recomputed on every alert; heading and next‑waypoint are shown on the UI. |
+| **Mobility‑Impaired Routing** | `GET /api/alerts/route` accepts `mobilityImpaired=true` and avoids stairs. |
+| **Simulation UI** | Buttons to simulate fire, smoke, congestion, etc., automatically persisting to Firestore and invoking the Java REST endpoint. |
+| **Dark / Glowing UI** | Tailwind + custom CSS give a glass‑morphism radar with red/rose accents (see `src/index.css`). |
+| **SMS Alert** | Twilio integration (`SmsService`) sends an SMS on every new SOS. |
+| **WebRTC Signaling Stub** | Minimal signaling endpoint for future video‑assist integration. |
 
 ---
 
-### ⚙️ Quick Start
+## 🏗️ Architecture Overview
+```
++-------------------+        +---------------------+        +-------------------+
+|   Frontend (React) | <--> |   Firestore (Realtime) | <--> |   Backend (Spring) |
+|   Dashboard.jsx    |      |   Alerts collection    |      |   AlertController |
+|   HotelMap.jsx     |      |   TTL cleanup worker  |      |   EvacuationPathfinder |
++-------------------+        +---------------------+        +-------------------+
+```
+- **Frontend** subscribes to `alerts` collection, updates UI, and calls `/api/alerts/path` for heading.
+- **Backend** stores alerts, runs deduplication, updates the pathfinder, and exposes `/api/alerts/route` for custom routing.
+- **EmergencyPacketDto** holds the schema (uniqueId, ttl, emergencyType, etc.).
+- **SMS** is triggered via `SmsService`. 
 
-#### 1. Setup Environment
-Copy `.env.example` to `.env` and add your **FREE Google AI API Key** from [aistudio.google.com](https://aistudio.google.com).
+---
 
-#### 2. Start the GDC Server (Java)
+## 🚀 Getting Started
+### Prerequisites
+- **Java 21** + Maven wrapper (`.\mvnw.cmd`).
+- **Node 20** (npm). 
+- **Google Cloud Firestore** project (set `FIREBASE_CONFIG` env var) or use the local emulator.
+- (Optional) **Twilio** credentials for SMS (`TWILIO_SID`, `TWILIO_TOKEN`).
+
+### Backend
 ```bash
 cd backend/server
-./mvnw spring-boot:run
+./mvnw.cmd spring-boot:run   # starts on http://localhost:8080
 ```
+The server will listen on port 8080. If the port is busy, kill the process (`netstat -ano | findstr :8080` then `taskkill /PID <pid> /F`).
 
-#### 3. Start the Dashboard (React)
+### Frontend
 ```bash
 cd frontend/web
 npm install
-npm start
+npm run dev   # http://localhost:3000
+```
+Make sure the `.env.local` file contains:
+```
+VITE_FIREBASE_API_KEY=your-key
+VITE_FIREBASE_PROJECT_ID=your-project
 ```
 
-#### 4. Start the ML CCTV Node (Python)
-```bash
-cd backend/ml
-pip install -r requirements.txt
-python src/motion_detection.py
-```
+---
+
+## 📡 API Endpoints
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/api/alerts` | Accepts an `EmergencyPacketDto`; adds to Firestore, triggers SMS, updates graph. |
+| `GET` | `/api/alerts/path?roomId=R301&hazardId=H_NORTH` | Returns heading, next waypoint & estimated time after recalculating safe path. |
+| `POST` | `/api/alerts/route` | Body `{ currentNode, guestId, mobilityImpaired }` → safe route list + heading. |
+| `GET` | `/api/alerts/active` | Returns all active (non‑resolved) alerts. |
+| `POST` | `/api/alerts/{id}/resolve` | Mark alert resolved → hazards cleared. |
+| `POST` | `/api/webrtc/signal/{targetId}` | Stub for future video‑assist signalling. |
 
 ---
 
----
-
-## 🛡️ Final Technical Showcase (For PPT/Judges)
-
-Vanguard-Total is engineered for **Zero-Failure Response**. Use these points for your pitch:
-
-### 1. Hazard-Aware SafePath (Dijkstra Edge Intelligence)
-*   **The Brain**: A Java-based implementation of Dijkstra's algorithm running at the GDC Edge.
-*   **Dynamic Rerouting**: Unlike static maps, Vanguard monitors building-wide sensors. If a fire or threat is detected in the North Hallway, the AI instantly invalidates those nodes and reroutes all guests toward the nearest *safe* exit.
-*   **AR-Mirror Sync**: Staff can see a 3D "Mirror" of the guest's AR view on the dashboard to provide over-the-shoulder guidance.
-
-### 2. Lifeline HUD (Tactical Guest UI)
-*   **Biometric SOS**: High-impact, rapid-trigger interface for guests under extreme stress.
-*   **3D Guidance Compass**: A persistent AR-style arrow that translates complex building geometry into a simple "Walk This Way" vector.
-*   **Edge AI Continuity (Gemma)**: If the hotel's fiber-optic link is severed, Vanguard automatically switches to a **locally-hosted Gemma 2B model**. It provides safety instructions, translation, and triage guidance with 0% internet dependency.
-
-### 3. Accessibility-Native Routing (Inclusive Safety)
-*   **Automatic Stair-Bypass**: For guests tagged as "Wheelchair" or "Mobility Impaired," the AI brain automatically invalidates all stairwell nodes in the building graph. 
-*   **Ramp/Elevator Priority**: The system reroutes these guests exclusively through ramp-accessible or elevator-safe corridors, ensuring nobody is left behind during a high-speed evacuation.
-
-### 4. Tactical Haptic Guidance (Eyes-Free Navigation)
-*   **Safety Heartbeat**: A soft, rhythmic vibration pattern that tells visually impaired guests they are on the safe path without needing to see the screen.
-*   **Proximity Hazard Warnings**: A jagged, high-frequency vibration that triggers as the guest approaches a danger zone (e.g., active fire area), providing a physical "Force Field" of awareness.
-*   **Multi-Modal Inclusivity**: Vanguard is designed to protect guests who are deaf, blind, or both, ensuring safety is a universal right, not a privilege.
+## 🧪 Test Cases (Run with `npm test` or JUnit)
+1. **TTL Expiry** – Insert an alert with `timeToLive=2000` ms, wait 3 s, verify it is removed from Firestore and the graph is cleared.
+2. **Duplicate Detection** – Send two alerts with the same `uniqueId`; the second should be ignored (no extra hazard weight).
+3. **Mobility‑Impaired Routing** – Request route with `mobilityImpaired=true` from `R301`; result must **avoid** `STAIRS_A`/`STAIRS_B`.
+4. **Hazard Weighting** – Simulate `HEAVY_SMOKE` on `H_NORTH`; verify the heading changes to the south side and the weight printed in logs is `+50.0`.
+5. **SMS Trigger** – Mock `SmsService` and verify `sendEmergencySms` is called once per new alert.
+6. **WebSocket Broadcast** – Connect two SSE clients to `/stream?hotelId=GLOBAL`; when a new alert arrives both should receive the payload.
 
 ---
 
-## 🎮 The "Winning" Demo Script
+## 🖼️ UI Highlights
+- **Radar** with animated heading arrow.
+- **Toast notifications** for simulation actions.
+- **Dark glass‑morphism** background (`bg-gradient-to-br from-gray-900 via-black to-gray-800`).
+- **Responsive layout** – works on tablet and desktop.
 
-To demonstrate the **Intelligence** of Vanguard:
-1.  **Initiate SOS**: Open the Guest App (`/sos`) and trigger an emergency.
-2.  **Point out the Arrow**: Show the Green AR Compass. *"This is guiding the guest to the default exit."*
-3.  **Simulate Fire**: In a terminal, run the following to block the primary path:
-    `Invoke-RestMethod -Uri "http://localhost:8080/api/alerts/path?roomId=R301&hazardId=H_NORTH" -Method Get`
-4.  **The "Wow" Moment**: Watch the screen as the **Green Arrow physically rotates** to a new angle. *"The AI just detected a fire and rerouted the guest in under 10ms."*
+*Screenshots are located in `docs/screenshots/` (add your own after the demo).* 
 
-**Built for the Google Gemini Developer Challenge — Resilience, Inclusivity, and Intelligence.**
+---
+
+## 📦 Packaging for Hackathon
+1. Run `./mvnw.cmd clean package` – produces `gdc-server.jar`.
+2. Run `npm run build` – creates a static bundle in `frontend/web/build`.
+3. Serve the static files with any HTTP server (`serve -s build`).
+4. Deploy the jar to a cloud VM (e.g., Google Compute Engine) and point the client to the public IP.
+
+---
+
+## 🙋‍♀️ Contributing
+- Fork → create a feature branch.
+- Ensure `npm test` and `mvn test` pass.
+- Follow the **code‑style** in existing files (4‑space indent, Javadoc for Java, ESLint‑configured for React).
+
+---
+
+## 📜 License
+MIT – feel free to reuse for other safety‑critical demos.
+
+---
+
+*Happy hacking! 🚀*

@@ -51,7 +51,7 @@ public class EvacuationPathfinder {
         addNode(new Node("H_SOUTH", "South Hallway", 15, 5, "corridor"));
         addNode(new Node("STAIRS_A", "Emergency Stairs A", 5, 15, "stairwell"));
         addNode(new Node("STAIRS_B", "Emergency Stairs B", 25, 5, "stairwell"));
-        addNode(new Node("EXIT_MAIN", "Main Lobby Exit", 15, 0, "exit"));
+        addNode(new Node("EXIT_MAIN", "Main Lobby Exit", 15, -6, "exit"));
         addNode(new Node("ELEVATOR_MAIN", "Main Elevator", 15, 10, "elevator"));
 
         // Define Connections (Edges)

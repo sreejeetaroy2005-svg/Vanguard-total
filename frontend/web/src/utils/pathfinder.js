@@ -23,9 +23,10 @@ class EvacuationPathfinder {
         this.addNode(new Node("R302", "Room 302", 20, 10));
         this.addNode(new Node("H_NORTH", "North Hallway", 15, 15));
         this.addNode(new Node("H_SOUTH", "South Hallway", 15, 5));
-        this.addNode(new Node("STAIRS_A", "Emergency Stairs A", 5, 15));
-        this.addNode(new Node("STAIRS_B", "Emergency Stairs B", 25, 5));
-        this.addNode(new Node("EXIT_MAIN", "Main Lobby Exit", 15, 0));
+        this.addNode(new Node("STAIRS_A", "Stairs A", 5, 15));
+        this.addNode(new Node("STAIRS_B", "Stairs B", 25, 5));
+        this.addNode(new Node("EXIT_MAIN", "Main Exit", 15, -6));
+
 
         // Define Connections
         this.link("R301", "H_NORTH");
