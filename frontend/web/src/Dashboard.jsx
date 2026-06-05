@@ -280,7 +280,7 @@ const Dashboard = () => {
       })
       calculateLocalPath()
     }, (err) => {
-      setError('Uplink Failed: ' + err.message)
+      setError('Connection Failed: ' + err.message)
       setLoading(false)
     })
     return () => unsubscribe()
@@ -644,7 +644,7 @@ const Dashboard = () => {
                   ))}
                 </div>
                 <div>
-                  <p className="text-[10px] font-black text-emerald-400 uppercase tracking-widest">Voice Uplink Ready</p>
+                  <p className="text-[10px] font-black text-emerald-400 uppercase tracking-widest">Voice Connection Ready</p>
                   <p className="text-[9px] text-zinc-500 font-semibold tracking-wider mt-0.5">Dual-channel peer-to-peer</p>
                 </div>
               </div>
@@ -762,7 +762,7 @@ const Dashboard = () => {
           </div>
           <div className="tactical-glass p-5 rounded-2xl flex flex-col justify-center border-l-4 border-sky-500 relative overflow-hidden group">
             <div className="absolute top-[-10%] right-[-10%] w-[80px] h-[80px] rounded-full bg-sky-500/5 group-hover:bg-sky-500/10 transition-all blur-md"></div>
-            <p className="font-mono text-[9px] font-black tracking-widest text-zinc-500 mb-1.5 uppercase">Encryption Uplink</p>
+            <p className="font-mono text-[9px] font-black tracking-widest text-zinc-500 mb-1.5 uppercase">Encryption Connection</p>
             <p className="font-display text-4xl font-black text-white leading-none">ACTIVE</p>
           </div>
           <div className="tactical-glass p-5 rounded-2xl flex flex-col justify-center border-l-4 border-amber-500 relative overflow-hidden group">

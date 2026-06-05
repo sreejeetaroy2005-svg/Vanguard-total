@@ -40,7 +40,7 @@ export default function Register() {
       navigate('/'); // Go back to Main Gateway
     } catch (err) {
       console.error(err);
-      alert("UPLINK FAILED: " + err.message);
+      alert("REGISTRATION FAILED: " + err.message);
     }
     setLoading(false);
   };

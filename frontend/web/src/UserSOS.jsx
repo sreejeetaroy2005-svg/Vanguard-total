@@ -180,7 +180,7 @@ function UserSOS() {
       setIsVoiceActive(true);
       setMessage('LIVE VOICE CHANNEL SECURED');
     } catch (err) {
-      setError('VOICE UPLINK FAILED: ' + err.message);
+      setError('VOICE CONNECTION FAILED: ' + err.message);
     }
   }
 
@@ -216,13 +216,13 @@ function UserSOS() {
       setLatestStatus('PENDING');
       setMessage('TACTICAL SOS BROADCASTED');
       
-      // 2. BACKGROUND UPLINK: Get AI assessment without blocking
+      // 2. BACKGROUND CONNECTION: Get AI assessment without blocking
       sendAlert(payload).then(resp => {
         const aiSeverity = resp.data.aiThreatSeverity;
         setAiSeverity(aiSeverity);
         updateDoc(doc(db, 'alerts', alertDoc.id), { aiThreatSeverity: aiSeverity });
       }).catch(err => {
-        console.warn("AI Uplink Failed");
+        console.warn("AI Connection Failed");
         setAiSeverity("MANUAL TRIAGE REQUIRED");
       });
 
@@ -338,7 +338,7 @@ function UserSOS() {
                 <div className="flex items-center gap-2.5">
                   <div className={`w-2.5 h-2.5 rounded-full ${isVoiceActive ? 'bg-emerald-500 animate-ping' : 'bg-zinc-700'}`}></div>
                   <div>
-                    <p className="font-mono text-[9px] font-black uppercase tracking-widest text-white">Direct Mic Uplink</p>
+                    <p className="font-mono text-[9px] font-black uppercase tracking-widest text-white">Direct Mic Connection</p>
                     <p className="text-[8px] text-zinc-500 mt-0.5">{isVoiceActive ? 'Live streaming audio' : 'Channel offline'}</p>
                   </div>
                 </div>
@@ -409,7 +409,7 @@ function UserSOS() {
                   : 'bg-rose-600 hover:bg-rose-500 text-white shadow-[0_4px_30px_rgba(239,68,68,0.25)]'
               }`}
             >
-              {loading ? 'Transmitting Alert...' : 'Initiate SOS Uplink'}
+              {loading ? 'Transmitting Alert...' : 'Initiate SOS Request'}
             </button>
           </div>
         </div>

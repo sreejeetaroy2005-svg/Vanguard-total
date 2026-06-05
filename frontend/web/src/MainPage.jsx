@@ -1,8 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 export default function MainPage() {
-  const navigate = useNavigate();
+  const navigate = useNavigate(); const [navOpen, setNavOpen] = useState(false);
 
   return (
     <div className="min-h-screen relative flex flex-col justify-between overflow-x-hidden overflow-y-auto bg-[#030303]">
@@ -24,9 +24,9 @@ export default function MainPage() {
 
           {/* Navigation Links (AdaptFit Center Link Style) */}
           <nav className="hidden md:flex items-center gap-8">
-            <a href="#uplinks" className="text-xs font-semibold uppercase tracking-wider text-zinc-400 transition hover:text-white">Uplink Portals</a>
-            <a href="#features" className="text-xs font-semibold uppercase tracking-wider text-zinc-400 transition hover:text-white">Mesh Protocol</a>
-            <a href="#status" className="text-xs font-semibold uppercase tracking-wider text-zinc-400 transition hover:text-white">GDC Status</a>
+            <a href="#uplinks" className="text-xs font-semibold uppercase tracking-wider text-zinc-400 transition hover:text-white">Access Portals</a>
+            <a href="#features" className="text-xs font-semibold uppercase tracking-wider text-zinc-400 transition hover:text-white">Core Features</a>
+            <a href="#status" className="text-xs font-semibold uppercase tracking-wider text-zinc-400 transition hover:text-white">System Status</a>
           </nav>
 
           {/* CTA Buttons (AdaptFit Right Nav Style) */}
@@ -41,9 +41,24 @@ export default function MainPage() {
               onClick={() => navigate('/signup')}
               className="hidden sm:flex items-center justify-center rounded-full border border-rose-500/30 bg-rose-950/20 px-5 py-2 text-xs font-bold uppercase tracking-widest text-rose-400 hover:bg-rose-500 hover:text-white hover:border-rose-500 transition-all duration-300 shadow-[0_0_15px_rgba(239,68,68,0.1)] cursor-pointer"
             >
-              Secure Uplink
+              Register
+            </button>
+            <button 
+              className="md:hidden text-zinc-400 hover:text-white cursor-pointer"
+              onClick={() => setNavOpen(!navOpen)}
+            >
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>
             </button>
           </div>
+        </div>
+
+        {/* Mobile Navigation */}
+        <div className={`md:hidden overflow-hidden transition-all duration-300 ${navOpen ? 'max-h-48 border-t border-white/5 bg-[#030303]/90' : 'max-h-0'}`}>
+          <nav className="flex flex-col px-6 py-4 space-y-4">
+            <a href="#uplinks" onClick={() => setNavOpen(false)} className="text-xs font-semibold uppercase tracking-wider text-zinc-400 transition hover:text-white">Access Portals</a>
+            <a href="#features" onClick={() => setNavOpen(false)} className="text-xs font-semibold uppercase tracking-wider text-zinc-400 transition hover:text-white">Core Features</a>
+            <a href="#status" onClick={() => setNavOpen(false)} className="text-xs font-semibold uppercase tracking-wider text-zinc-400 transition hover:text-white">System Status</a>
+          </nav>
         </div>
       </header>
 
@@ -91,7 +106,7 @@ export default function MainPage() {
             <span className="gradient-text-cyan font-black">Redesigned by AI.</span>
           </h1>
           <p className="max-w-2xl mx-auto text-sm md:text-base text-zinc-400 leading-relaxed font-medium">
-            Vanguard is a military-grade local defense and evacuation coordination system. Real-time pathfinding, camera feeds, and automated P2P fallback keep facilities and guests safe.
+            Vanguard is an enterprise-grade emergency response and evacuation coordination system. Real-time pathfinding, camera feeds, and automated P2P fallback keep facilities and guests safe.
           </p>
         </div>
 
@@ -101,34 +116,34 @@ export default function MainPage() {
           {/* HOTEL ADMINISTRATION PORTAL */}
           <div 
             onClick={() => navigate('/login')}
-            className="group relative cursor-pointer rounded-3xl border border-white/5 bg-zinc-900/30 p-8 md:p-10 text-left transition-all duration-300 hover:border-rose-500/40 hover:bg-zinc-900/50 hover:shadow-[0_0_35px_rgba(239,68,68,0.1)] backdrop-blur-md"
+            className="group relative cursor-pointer rounded-3xl border border-rose-500/80 bg-zinc-900/30 p-10 md:p-12 text-left transition-all duration-300 hover:border-rose-500 hover:bg-zinc-900/50 shadow-[0_0_30px_rgba(239,68,68,0.3)] hover:shadow-[0_0_40px_rgba(239,68,68,0.4)] backdrop-blur-md"
           >
             {/* Top Glowing Decorator */}
             <div className="absolute top-0 left-0 w-full h-[3px] bg-gradient-to-r from-rose-500 to-amber-500 rounded-t-3xl"></div>
             
             {/* Icon & Glow */}
-            <div className="mb-6 flex h-14 w-14 items-center justify-center rounded-2xl border border-rose-500/20 bg-rose-500/10 text-3xl shadow-[0_0_15px_rgba(239,68,68,0.1)] transition-transform duration-300 group-hover:scale-110">
+            <div className="mb-6 flex h-14 w-14 items-center justify-center rounded-2xl border border-rose-500/40 bg-rose-500/20 text-3xl shadow-[0_0_20px_rgba(239,68,68,0.2)] transition-transform duration-300 group-hover:scale-110">
               🏨
             </div>
             
             <h2 className="font-display text-xl font-bold tracking-wide text-white mb-3 flex items-center gap-2.5">
-              HOTEL LOGIN
+              ADMIN PORTAL — Primary Access
               <span className="text-zinc-600 text-xs font-normal group-hover:translate-x-1 transition-transform">→</span>
             </h2>
             
             <p className="text-xs text-zinc-400 leading-relaxed mb-8 min-h-[60px]">
-              Facility management uplink. Upload blueprints, define safety vectors, track guests, and manage active alarms from the command HUD.
+              Facility management portal. Upload blueprints, define safety vectors, track guests, and manage active alarms from the operations dashboard.
             </p>
             
-            <div className="inline-flex items-center justify-center w-full rounded-xl border border-rose-500/40 bg-rose-500/5 py-3 text-xs font-bold uppercase tracking-widest text-rose-400 transition group-hover:bg-rose-600 group-hover:text-white group-hover:border-rose-600">
-              ADMIN UPLINK
+            <div className="inline-flex items-center justify-center w-full rounded-xl border border-rose-500/60 bg-rose-500/10 py-3 text-xs font-bold uppercase tracking-widest text-rose-400 transition group-hover:bg-rose-600 group-hover:text-white group-hover:border-rose-600">
+              Admin Portal
             </div>
           </div>
 
           {/* GUEST / USER PORTAL */}
           <div 
             onClick={() => navigate('/signup')}
-            className="group relative cursor-pointer rounded-3xl border border-white/5 bg-zinc-900/30 p-8 md:p-10 text-left transition-all duration-300 hover:border-sky-500/40 hover:bg-zinc-900/50 hover:shadow-[0_0_35px_rgba(14,165,233,0.1)] backdrop-blur-md"
+            className="group relative cursor-pointer rounded-3xl border border-sky-500/20 bg-zinc-900/30 p-8 text-left transition-all duration-300 hover:border-sky-500/40 hover:bg-zinc-900/50 hover:shadow-[0_0_35px_rgba(14,165,233,0.1)] backdrop-blur-md"
           >
             {/* Top Glowing Decorator */}
             <div className="absolute top-0 left-0 w-full h-[3px] bg-gradient-to-r from-sky-500 to-indigo-500 rounded-t-3xl"></div>
@@ -139,16 +154,16 @@ export default function MainPage() {
             </div>
             
             <h2 className="font-display text-xl font-bold tracking-wide text-white mb-3 flex items-center gap-2.5">
-              GUEST ACCESS
+              GUEST PORTAL — Register Your Stay
               <span className="text-zinc-600 text-xs font-normal group-hover:translate-x-1 transition-transform">→</span>
             </h2>
             
             <p className="text-xs text-zinc-400 leading-relaxed mb-8 min-h-[60px]">
-              Guest tactical dashboard. Open a secure voice line, request emergency SOS assistance, and fetch localized evacuation paths.
+              Guest emergency dashboard. Open a secure voice line, request emergency SOS assistance, and fetch localized evacuation paths.
             </p>
             
             <div className="inline-flex items-center justify-center w-full rounded-xl border border-sky-500/40 bg-sky-500/5 py-3 text-xs font-bold uppercase tracking-widest text-sky-400 transition group-hover:bg-sky-600 group-hover:text-white group-hover:border-sky-600">
-              GUEST UPLINK
+              Guest Portal
             </div>
           </div>
 
@@ -187,28 +202,21 @@ export default function MainPage() {
         </section>
 
         {/* GDC STATUS SECTION */}
-        <section id="status" className="w-full mt-20 border-t border-white/5 pt-16 text-left">
+        <section id="status" className="w-full mt-20 border-t border-white/5 pt-16 text-left mb-10">
           <div className="mb-10">
             <span className="text-[10px] font-black tracking-widest text-sky-400 uppercase">SYSTEM TELEMETRY</span>
-            <h3 className="font-display text-2xl md:text-3xl font-black text-white mt-1 uppercase">LIVE GDC HUB HEALTH</h3>
+            <h3 className="font-display text-2xl md:text-3xl font-black text-white mt-1 uppercase">Live System Health</h3>
           </div>
           
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="tactical-glass p-5 rounded-2xl border border-white/5 text-center">
-              <p className="text-[8px] font-bold text-zinc-500 uppercase tracking-widest mb-1">GDC CENTRAL</p>
-              <p className="font-display text-lg font-black text-emerald-400">ONLINE</p>
-            </div>
-            <div className="tactical-glass p-5 rounded-2xl border border-white/5 text-center">
-              <p className="text-[8px] font-bold text-zinc-500 uppercase tracking-widest mb-1">FIREWALL INTEGRITY</p>
-              <p className="font-display text-lg font-black text-emerald-400">99.98%</p>
-            </div>
-            <div className="tactical-glass p-5 rounded-2xl border border-white/5 text-center">
-              <p className="text-[8px] font-bold text-zinc-500 uppercase tracking-widest mb-1">ACTIVE MESH NODES</p>
-              <p className="font-display text-lg font-black text-white">5x REPLICATED</p>
-            </div>
-            <div className="tactical-glass p-5 rounded-2xl border border-white/5 text-center">
-              <p className="text-[8px] font-bold text-zinc-500 uppercase tracking-widest mb-1">API DISPATCH DELAY</p>
-              <p className="font-display text-lg font-black text-white">&lt; 8ms</p>
+          <div className="w-full">
+            <div className="tactical-glass p-5 rounded-2xl border border-white/5 flex items-center justify-center gap-3">
+              <span className="relative flex h-3 w-3">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500 shadow-[0_0_8px_#10b981]"></span>
+              </span>
+              <span className="font-display text-lg font-bold text-emerald-400 uppercase tracking-wide">
+                System operational — all services nominal
+              </span>
             </div>
           </div>
         </section>

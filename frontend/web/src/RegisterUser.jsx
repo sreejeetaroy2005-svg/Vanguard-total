@@ -237,7 +237,7 @@ function RegisterUser() {
               onClick={() => setIsLogin(!isLogin)}
               className="block w-full text-[10px] font-bold uppercase tracking-widest text-zinc-500 transition hover:text-rose-400 cursor-pointer"
             >
-              {isLogin ? "Request New Guest Code" : "Return to login uplink"}
+              {isLogin ? "Request New Guest Code" : "Return to login"}
             </button>
             <button
               onClick={() => navigate('/')}

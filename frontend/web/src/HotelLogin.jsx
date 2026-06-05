@@ -21,7 +21,7 @@ export default function HotelLogin() {
       }
       const data = snap.data();
       if (data.password !== formData.password) {
-        throw new Error("Invalid Tactical Password");
+        throw new Error("Invalid Admin Password");
       }
 
       // Success
@@ -55,7 +55,7 @@ export default function HotelLogin() {
             HOTEL <span className="text-sky-500">LOGIN</span>
           </h1>
           <p className="mt-1.5 text-[10px] font-bold tracking-widest text-zinc-500 uppercase">
-            Administrator Gateway Protocol
+            Administrator Portal
           </p>
         </div>
 
@@ -96,7 +96,7 @@ export default function HotelLogin() {
             className="group relative w-full overflow-hidden rounded-xl bg-sky-600 py-3.5 text-xs font-black tracking-widest text-white transition hover:bg-sky-500 disabled:opacity-50 cursor-pointer shadow-[0_4px_20px_rgba(14,165,233,0.2)]"
           >
             <span className="relative z-10">
-              {loading ? "AUTHORIZING..." : "ENTER TACTICAL HUD"}
+              {loading ? "AUTHORIZING..." : "ENTER DASHBOARD"}
             </span>
             <div className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/10 to-transparent transition-transform duration-500 group-hover:translate-x-full" />
           </button>
@@ -108,7 +108,7 @@ export default function HotelLogin() {
             onClick={() => navigate('/register')} 
             className="block w-full text-[10px] font-bold uppercase tracking-widest text-zinc-500 transition hover:text-sky-400 cursor-pointer"
           >
-            Register new facility // Uplink index
+            Register new facility // Index
           </button>
           <button 
             onClick={() => navigate('/')} 
