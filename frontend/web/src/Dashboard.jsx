@@ -102,6 +102,16 @@ const Dashboard = () => {
     return () => eventSource.close();
   }, []);
 
+  // Auto-dismiss SOS Popup after 30 seconds
+  useEffect(() => {
+    if (showSOSPopup && incomingSOS) {
+      const timer = setTimeout(() => {
+        setShowSOSPopup(false);
+      }, 30000);
+      return () => clearTimeout(timer);
+    }
+  }, [showSOSPopup, incomingSOS]);
+
   // Voice announcement using browser Web Speech API
   const speakAlert = (alert) => {
     try {
@@ -477,7 +487,7 @@ const Dashboard = () => {
   return (
     <div className={`min-h-screen bg-[#030303] text-zinc-100 flex flex-col overflow-hidden relative pb-16 transition-all duration-500 ${
       showSOSPopup ? 'animate-pulse-red' : ''
-    } ${isCrisisLockdown ? 'border-[8px] border-rose-600/40' : ''}`}>
+    } ${isCrisisLockdown ? 'border-[8px] border-rose-600/40 critical-screen-overlay' : ''}`}>
       {/* Background Decorators */}
       <div className="cyber-grid absolute inset-0"></div>
       <div className="absolute top-[10%] left-[30%] w-[500px] h-[500px] bg-rose-500/5 blur-[120px] pointer-events-none"></div>
@@ -515,19 +525,83 @@ const Dashboard = () => {
         </div>
       )}
  
+      {/* 🚨 NEW ALERT BANNER */}
+      {showSOSPopup && incomingSOS && (
+        <div className="fixed top-0 left-0 w-full z-[2000] animate-[slideDown_0.3s_ease-out]">
+          <div className="bg-zinc-950 border-b border-white/10 px-6 py-4 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-2xl backdrop-blur-md">
+            <div className="flex items-center gap-4">
+              <span className={`px-3 py-1 text-[10px] font-black rounded-full uppercase tracking-widest ${
+                incomingSOS.priority === 'CRITICAL' || incomingSOS.priority === 'FIRE' ? 'bg-rose-500/20 text-rose-400 border border-rose-500/50' : 
+                incomingSOS.priority === 'MEDIUM' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/50' : 
+                'bg-sky-500/20 text-sky-400 border border-sky-500/50'
+              }`}>
+                {incomingSOS.priority}
+              </span>
+              <div className="flex flex-col">
+                <span className="font-display font-black text-white text-lg">ROOM {incomingSOS.roomNumber} // {incomingSOS.emergencyType || incomingSOS.contextType || 'EMERGENCY'}</span>
+                <span className="font-mono text-[9px] font-bold text-zinc-400 uppercase tracking-widest">
+                  AI Confidence: {incomingSOS.aiConfidence || '98.4'}%
+                </span>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <button onClick={() => handleAcknowledge(incomingSOS)} className="px-6 py-2.5 bg-sky-600 hover:bg-sky-500 text-white font-black rounded-xl text-[10px] uppercase tracking-widest transition-all shadow-[0_0_15px_rgba(14,165,233,0.3)] cursor-pointer">
+                ACKNOWLEDGE
+              </button>
+              <button onClick={() => handleResolve(incomingSOS)} className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-black rounded-xl text-[10px] uppercase tracking-widest transition-all shadow-[0_0_15px_rgba(16,185,129,0.3)] cursor-pointer">
+                RESOLVE
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header Sticky Bar */}
-      <header className="sticky top-0 z-40 w-full border-b border-white/5 bg-[#030303]/60 backdrop-blur-md px-6 md:px-12 py-4 flex items-center justify-between">
+      <header className="sticky top-0 z-40 w-full border-b border-white/5 bg-[#030303]/60 backdrop-blur-md px-6 md:px-12 py-4 flex items-center justify-between flex-wrap gap-4">
         <div className="flex items-center gap-3">
           <span className="text-2xl shadow-[0_0_15px_rgba(239,68,68,0.3)]">🛡️</span>
           <div>
-            <h1 className="font-display text-lg font-black tracking-widest text-white leading-none">VANGUARD GDC</h1>
+            <div className="flex items-center gap-3">
+              <h1 className="font-display text-lg font-black tracking-widest text-white leading-none">VANGUARD GDC</h1>
+              <span className={`px-2 py-0.5 rounded-full border text-[8px] font-black uppercase tracking-widest flex items-center gap-1.5 ${
+                tarsLevel === 'CRITICAL' ? 'bg-rose-500/20 text-rose-400 border-rose-500/50 animate-pulse' :
+                tarsLevel === 'MEDIUM' ? 'bg-amber-500/20 text-amber-400 border-amber-500/50' :
+                'bg-zinc-800 text-zinc-500 border-zinc-700'
+              }`}>
+                {tarsLevel === 'CRITICAL' && <span className="w-1.5 h-1.5 rounded-full bg-rose-400 animate-ping"></span>}
+                TARS: {tarsLevel || 'STANDBY'}
+              </span>
+            </div>
             <p className="text-[9px] font-bold text-rose-500 uppercase tracking-widest mt-1">Tactical Coordination Hub</p>
           </div>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-wrap">
+          {lastRerouteMs !== null && (
+            <div className="hidden md:flex items-center gap-2 rounded-xl bg-zinc-900 border border-white/5 px-3 py-1.5 shadow-[0_0_10px_rgba(0,0,0,0.5)]">
+               <span className={`h-2 w-2 rounded-full ${lastRerouteMs < 200 ? 'bg-emerald-400' : 'bg-amber-400'}`}></span>
+               <span className="font-mono text-[9px] font-bold tracking-widest text-zinc-400 uppercase">Last reroute: {lastRerouteMs}ms</span>
+            </div>
+          )}
           <span className="hidden sm:inline rounded-full bg-zinc-900 border border-white/5 px-3 py-1.5 font-mono text-[9px] font-extrabold tracking-widest text-zinc-400">
             SECURE LINK // {hotelId.toUpperCase()}
           </span>
+          <button
+            onClick={() => {
+              if (isCrisisLockdown) {
+                setIsCrisisLockdown(false);
+                stopAlertSounds();
+              } else {
+                setIsCrisisLockdown(true);
+              }
+            }}
+            className={`flex items-center gap-2 rounded-xl px-4 py-2 font-display text-[9px] font-bold tracking-widest uppercase transition-all cursor-pointer ${
+              isCrisisLockdown 
+                ? 'bg-rose-600 text-white animate-pulse shadow-[0_0_20px_rgba(225,29,72,0.6)]' 
+                : 'bg-transparent border border-rose-500/40 text-rose-400 hover:bg-rose-600/10'
+            }`}
+          >
+            {isCrisisLockdown ? 'LOCKDOWN ACTIVE — CLICK TO LIFT' : 'INITIATE LOCKDOWN'}
+          </button>
           <button
             onClick={simulateFireEndpoint}
             disabled={fireSimLoading}
@@ -567,25 +641,6 @@ const Dashboard = () => {
       {showMap && (
         <div className="fixed inset-0 z-[2000] overflow-hidden bg-black animate-fadeIn">
           <HotelMapSystem onClose={() => setShowMap(false)} />
-        </div>
-      )}
-
-      {/* CRISIS LOCKDOWN STATUS BAR */}
-      {isCrisisLockdown && (
-        <div className="bg-rose-600 border-b border-rose-500/30 px-6 py-2.5 flex items-center justify-between text-white relative z-30 animate-pulse relative">
-          <div className="flex items-center gap-2">
-            <span className="animate-ping h-2.5 w-2.5 rounded-full bg-white"></span>
-            <p className="font-mono text-[9px] font-black uppercase tracking-[0.25em]">🚨 EMERGENCY CRISIS LOCKDOWN MODE ENGAGED // EEP DIRECT BROADCAST ONLINE</p>
-          </div>
-          <button 
-            onClick={() => {
-              setIsCrisisLockdown(false);
-              stopAlertSounds();
-            }}
-            className="px-4 py-1.5 bg-black/40 hover:bg-rose-700/80 text-white font-mono text-[8px] font-black uppercase rounded-lg border border-white/10 transition cursor-pointer"
-          >
-            DISARM LOCKDOWN
-          </button>
         </div>
       )}
       
@@ -952,9 +1007,12 @@ const Dashboard = () => {
             {/* Feed List */}
             <div className="space-y-4 max-h-[850px] overflow-y-auto pr-2 custom-scrollbar pb-12">
               {activeThreats.length === 0 ? (
-                <div className="py-24 text-center tactical-glass rounded-3xl border border-white/5 flex flex-col items-center justify-center">
-                  <div className="w-10 h-10 border-2 border-zinc-800 border-t-rose-500 rounded-full animate-spin mb-4"></div>
-                  <p className="text-zinc-500 font-mono font-black uppercase tracking-[0.3em] text-[9px]">Scanning mesh spectra...</p>
+                <div className="py-24 text-center rounded-3xl border border-white/5 flex flex-col items-center justify-center h-64">
+                  <div className="relative flex items-center justify-center mb-3">
+                    <span className="absolute w-3 h-3 bg-emerald-500 rounded-full animate-ping"></span>
+                    <span className="relative w-3 h-3 bg-emerald-500 rounded-full"></span>
+                  </div>
+                  <p className="text-zinc-500 font-mono font-medium text-sm">All clear — no active alerts</p>
                 </div>
               ) : (
                 activeThreats.map((alert) => {
