@@ -88,10 +88,21 @@ def send_vanguard_alert(message, context_type, priority):
 
 def ai_detection_loop():
     global latest_frame
-    # Trying index 1 in case index 0 is locked by another app
+    # Try index 1 first in case index 0 is locked/virtual, then fallback to index 0
+    using_sample_video = False
     cap = cv2.VideoCapture(1)
     if not cap.isOpened():
         cap = cv2.VideoCapture(0)
+    
+    if not cap.isOpened():
+        print("⚠️ Webcam not found. Falling back to sample video stream.")
+        video_url = 'http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4'
+        cap = cv2.VideoCapture(video_url)
+        using_sample_video = True
+    else:
+        # Force a standard resolution only for physical webcams
+        cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
     prev_gray = None
     fight_counter = 0
 
@@ -99,7 +110,18 @@ def ai_detection_loop():
 
     while cap.isOpened():
         ret, frame = cap.read()
-        if not ret: break
+        if not ret: 
+            if using_sample_video:
+                # If video ends, rewind to beginning to create an infinite loop
+                cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+                continue
+            else:
+                print("⚠️ Physical camera failed to grab frame (Windows driver issue). Falling back to sample video.")
+                cap.release()
+                video_url = 'http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4'
+                cap = cv2.VideoCapture(video_url)
+                using_sample_video = True
+                continue
         
         # --- AI DETECTION ---
         results = model(frame, conf=0.4, verbose=False)
@@ -144,37 +166,45 @@ def ai_detection_loop():
         for label, coords in threats_found:
             cv2.rectangle(frame, (coords[0], coords[1]), (coords[2], coords[3]), (0, 0, 255), 3)
             send_vanguard_alert(f"AI THREAT: Weapon Detected ({label})", "THREAT", "CRITICAL")
-            # Fire LLM-powered emergency dispatch with snapshot
-            alert_payload = {
-                "message": f"AI THREAT: Weapon Detected ({label})",
-                "priority": "CRITICAL",
-                "roomNumber": "R301",
-                "floor": "3",
-                "hotelId": HOTEL_ID,
-            }
-            emergency_dispatch(alert_payload, frame=frame, guest_count=len(person_boxes))
+            try:
+                alert_payload = {
+                    "message": f"AI THREAT: Weapon Detected ({label})",
+                    "priority": "CRITICAL",
+                    "roomNumber": "R301",
+                    "floor": "3",
+                    "hotelId": HOTEL_ID,
+                }
+                emergency_dispatch(alert_payload, frame=frame, guest_count=len(person_boxes))
+            except Exception as e:
+                print("⚠️ Emergency dispatch failed (likely Gemini API rate limit):", e)
 
         if fight_counter > 10:
             cv2.putText(frame, "⚠️ FIGHT DETECTED", (50, 150), 2, 1, (0,0,255), 3)
             send_vanguard_alert("AI THREAT: Physical Altercation", "THREAT", "CRITICAL")
-            emergency_dispatch({
-                "message": "AI THREAT: Physical Altercation Detected",
-                "priority": "CRITICAL",
-                "roomNumber": "R301",
-                "floor": "3",
-                "hotelId": HOTEL_ID,
-            }, frame=frame, guest_count=len(person_boxes))
+            try:
+                emergency_dispatch({
+                    "message": "AI THREAT: Physical Altercation Detected",
+                    "priority": "CRITICAL",
+                    "roomNumber": "R301",
+                    "floor": "3",
+                    "hotelId": HOTEL_ID,
+                }, frame=frame, guest_count=len(person_boxes))
+            except Exception as e:
+                print("⚠️ Emergency dispatch failed (likely Gemini API rate limit):", e)
 
         if len(person_boxes) > CROWD_LIMIT and movement_score > RUSH_THRESHOLD:
             cv2.putText(frame, "🚨 STAMPEDE RISK", (50, 50), 2, 1, (0,0,255), 3)
             send_vanguard_alert("AI THREAT: Stampede Detected", "THREAT", "CRITICAL")
-            emergency_dispatch({
-                "message": f"AI THREAT: Stampede Risk — {len(person_boxes)} people detected",
-                "priority": "CRITICAL",
-                "roomNumber": "Lobby",
-                "floor": "1",
-                "hotelId": HOTEL_ID,
-            }, frame=frame, guest_count=len(person_boxes))
+            try:
+                emergency_dispatch({
+                    "message": f"AI THREAT: Stampede Risk — {len(person_boxes)} people detected",
+                    "priority": "CRITICAL",
+                    "roomNumber": "Lobby",
+                    "floor": "1",
+                    "hotelId": HOTEL_ID,
+                }, frame=frame, guest_count=len(person_boxes))
+            except Exception as e:
+                print("⚠️ Emergency dispatch failed (likely Gemini API rate limit):", e)
 
         prev_gray = gray
         with lock:

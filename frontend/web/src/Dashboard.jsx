@@ -67,6 +67,12 @@ const Dashboard = () => {
       setIncomingSOS(alertData);
       setShowSOSPopup(true);
       
+      // Auto-append to local state for full offline autonomy (bypasses Firebase dependency)
+      setAlerts(prev => {
+        if (prev.some(a => a.uniqueId === alertData.uniqueId)) return prev;
+        return [alertData, ...prev];
+      });
+      
       // Live reroute timing from SSE
       if (alertData.rerouteMs !== undefined && alertData.rerouteMs !== null) {
         setLastRerouteMs(alertData.rerouteMs);

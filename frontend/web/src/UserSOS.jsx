@@ -242,22 +242,27 @@ function UserSOS() {
         hotelId: localStorage.getItem('hotelId') || 'GLOBAL',
       }
       
-      const alertDoc = await addDoc(collection(db, 'alerts'), {
-        ...payload,
-        aiThreatSeverity: "ANALYZING...",
-        timestamp: Date.now()
-      });
-
       setLatestStatus('PENDING');
       setMessage('TACTICAL SOS BROADCASTED');
       setSosStatus('success');
-      
-      sendAlert(payload).then(resp => {
+
+      // 1. Send to Java Edge Server to ensure instantaneous SafePath routing & SSE
+      sendAlert(payload).then(async (resp) => {
         const aiSeverity = resp.data.aiThreatSeverity;
         setAiSeverity(aiSeverity);
-        updateDoc(doc(db, 'alerts', alertDoc.id), { aiThreatSeverity: aiSeverity });
+        
+        // 2. Persist to Firebase in background (Catch permissions errors silently if guest isn't authenticated)
+        try {
+          const alertDoc = await addDoc(collection(db, 'alerts'), {
+            ...payload,
+            aiThreatSeverity: aiSeverity,
+            timestamp: Date.now()
+          });
+        } catch (fbErr) {
+          console.warn("Firebase persistence skipped (guest session):", fbErr.message);
+        }
       }).catch(err => {
-        console.warn("AI Connection Failed");
+        console.warn("Backend API Failed:", err);
         setAiSeverity("MANUAL TRIAGE REQUIRED");
       });
 
