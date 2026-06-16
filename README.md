@@ -72,5 +72,5 @@ npm run dev                  # runs on http://localhost:3000
 cd ../../ml_component
 python motion_detection.py   # runs locally, not integrated into the server
 ```
-*Built for the Google Gemini Developer Challenge*
+
 *Resilience. Inclusivity. Intelligence.*
